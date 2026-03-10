@@ -8,8 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node --import tsx/esm server.ts",
-    "postbuild": "drizzle-kit push",
+    "start": "next start",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "lint": "next lint"

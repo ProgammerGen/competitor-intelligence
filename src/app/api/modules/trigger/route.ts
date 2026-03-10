@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import { runModule } from "@/lib/modules";
 
@@ -14,9 +15,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid moduleType" }, { status: 400 });
   }
 
-  // Fire and forget — don't await so the HTTP request returns immediately
-  runModule(moduleType, competitorId).catch((err) => {
-    console.error(`[trigger] ${moduleType} error:`, err);
+  // after() keeps the serverless function alive after response is sent (works on Vercel)
+  after(async () => {
+    await runModule(moduleType, competitorId).catch((err) => {
+      console.error(`[trigger] ${moduleType} error:`, err);
+    });
   });
 
   return NextResponse.json({ status: "triggered" });
