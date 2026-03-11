@@ -1,6 +1,6 @@
 # Competitor Intelligence App
 
-Monitor your e-commerce competitors across product launches, news, Reddit, and job postings. Events are scored for relevance and surfaced in a ranked, signal-to-noise–filtered feed.
+Monitor your e-commerce competitors across product launches, news, web mentions, and job postings. Events are scored for relevance and surfaced in a ranked, signal-to-noise–filtered feed.
 
 **Live URL:** *(fill in after Vercel deployment)*
 
@@ -29,7 +29,7 @@ npm run dev       # starts at http://localhost:3000
 | `NEWS_API_KEY` | newsapi.org/register |
 | `CRON_SECRET` | Auto-injected by Vercel — leave blank locally |
 
-> **No Reddit credentials required.** The Reddit module uses the public JSON API — no app registration needed.
+> **Web Search (Module C)** uses the Tavily Search API. Set `TAVILY_API_KEY` in your environment — sign up at tavily.com (free tier: 1000 searches/month).
 
 ---
 
@@ -58,7 +58,7 @@ Vercel (Next.js serverless)          Railway
 
 `events` table — all intelligence signals normalized to a common shape:
 
-- `external_id`: module-specific deduplication key (Shopify product ID · article URL · Reddit post ID · job URL)
+- `external_id`: module-specific deduplication key (Shopify product ID · article URL · web result URL · job URL)
 - `UNIQUE(competitor_id, module_type, external_id)`: the idempotency index — schema-level, not application-level
 - `raw_data JSONB`: full original payload stored for score recomputation without re-fetching
 - `source_url NOT NULL`: enforced at DB level, never null
@@ -107,7 +107,7 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 |---|---|---|
 | A — Product Launches | ✅ Working | 4-strategy fetch: Shopify `/products.json` → WooCommerce Store API → Sitemap XML → HTML scraping (JSON-LD + schema.org) |
 | B — News | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
-| C — Reddit | ✅ Working | Public Reddit JSON API (no OAuth), industry-inferred subreddits, filters posts with score < 5 |
+| C — Web Search | ✅ Working | Tavily Search API, past-30-day web mentions, batched LLM scoring, suppresses score < 25 |
 | D — Job Postings | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
 
 **Job postings caveat:** The cheerio scraper works on server-rendered career pages. Most modern brands use React/Next.js job boards that return empty HTML to a plain `fetch()`. In production this would use Playwright or Proxycurl. The module fails gracefully — 0 results logged, no crash, no user-visible error.
@@ -126,7 +126,7 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 - Step 4: feed with all required card fields, competitor/module/score filters, sort by relevance and date, empty + error states
 - Relevance scoring: signal 50% + recency 30% + sentiment 20%, decay table exact to spec, suppress 90+ days
 - Context feeding: company name, industry, target customer profile, why_customers_buy fed to every scoring prompt
-- Batching: news and Reddit scored in a single LLM call per competitor (spec requirement)
+- Batching: news and web search results scored in a single LLM call per competitor (spec requirement)
 - Idempotency: `UNIQUE(competitor_id, module_type, external_id)` enforced at schema level
 - All 7 required tables: users, user_companies, tracked_competitors, product_snapshots, events, relevance_scores, module_runs
 - Deployment: Vercel (app) + Railway (PostgreSQL) + Vercel Cron (daily scheduler)
@@ -141,7 +141,7 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 | Job fields: no department or location | Store title, department, location, URL, summary | Only title + URL + summary stored | Parse from HTML; not reliably available on static pages |
 | Detected timestamp not in feed | Both event timestamp and detected timestamp required | Only `event_occurred_at` shown | Add second timestamp to FeedCard |
 | Sort by sentiment | "Sort by: relevance (default), date, sentiment" | Score and date only | `orderBy(desc(relevanceScores.sentimentScore))` |
-| Reddit: public API vs OAuth | "requires app registration at reddit.com/prefs/apps" | Uses public JSON API — no credentials | Register app for higher rate limits; public API is functional |
+| Web Search: Reddit replaced with Tavily | Reddit returned 403 in production | Tavily Search API, past-30-day results, no OAuth required | — |
 
 ### Out of scope (extra credit — not built)
 
@@ -277,11 +277,31 @@ Claude Code (Anthropic) was used throughout — scaffolding, debugging, refactor
 - **Why Vercel Cron over node-cron on Railway:** Vercel Cron is managed, zero infrastructure, survives deployments automatically. node-cron required a persistent process — a stateful dependency that complicates zero-downtime deploys.
 - **Why batched LLM calls:** Cost efficiency + relative score calibration within one context window.
 - **Why separate `relevance_scores` table:** Decouples event storage (append-only) from scoring (overwriteable). Enables prompt iteration without data loss.
-- **Why public Reddit API over OAuth:** No credentials to manage, simpler setup, sufficient for monitoring 5–20 competitors. Trade-off: max 25 results per request vs higher limits with OAuth.
+- **Why Tavily over Reddit:** Reddit's public JSON API returns 403 on Vercel serverless. Tavily provides structured web search results with no auth friction, a free tier adequate for this workload, and broader coverage across review sites, forums, and blogs.
 
 ---
 
 ## Release Notes
+
+### v1.1.0
+
+**Changes:**
+
+- **Module C: Reddit → Tavily Web Search** — Reddit's public JSON API returned 403 on Vercel serverless. Replaced with Tavily Search API (`past 30 days`, `max_results: 20`). Broader coverage across review sites, forums, and blogs. Requires `TAVILY_API_KEY`.
+- **Module A: Expanded product window** — Products module now surfaces all products with `created_at` within the past year, not only items new since the last snapshot. Recency penalty capped at −30 for products 91–365 days old so they remain visible in the feed.
+- **Module A: Tavily fallback** — When all 4 scraping strategies (Shopify JSON → WooCommerce → Sitemap → HTML) return no results (e.g. WAF-blocked sites), the module falls back to a Tavily product-launch search and inserts results as `product_launch` events.
+- **Min-score filter fix** — Feed filter always sends `minScore` param; adds `force-dynamic` to events route to prevent stale Next.js cache serving wrong results.
+- **ESLint 9** — Bumped `eslint` to `^9` to match `eslint-config-next@16` peer requirement (resolves Vercel build failure).
+
+**Known limitations in v1.1.0:**
+
+- **Module A (Product Launches) — partial ⚠️** — Shopify `/products.json` works reliably; WooCommerce, Sitemap, and HTML scraping strategies work on server-rendered sites. Major retailers with WAF/bot protection (403/429 on all 4 strategies) fall back to Tavily web search, which returns article-style mentions rather than structured product data. Full product catalog coverage requires a paid scraping proxy (e.g. Oxylabs, Bright Data) or retailer API access.
+- Job module returns empty results on JS-rendered career pages
+- Similarity score is display-only in the competitor list (not inline-editable)
+- Feed shows event timestamp only; detected_at not displayed
+- Sort by sentiment not available
+
+---
 
 ### v1.0.0
 

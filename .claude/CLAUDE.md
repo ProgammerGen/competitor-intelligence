@@ -31,4 +31,4 @@
 - `postbuild` runs `drizzle-kit push` which fails locally without DATABASE_URL — normal/expected
 
 ## Env Vars Required
-DATABASE_URL, OPENAI_API_KEY, NEWS_API_KEY, REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET
+DATABASE_URL, OPENAI_API_KEY, NEWS_API_KEY, TAVILY_API_KEY

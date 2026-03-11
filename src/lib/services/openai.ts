@@ -139,43 +139,6 @@ Return JSON with a "results" array matching each input by index.`,
   return parsed.results ?? [];
 }
 
-export async function scoreRedditPosts(
-  company: UserCompany,
-  competitorName: string,
-  competitorDomain: string,
-  posts: Array<{
-    index: number;
-    id: string;
-    title: string;
-    selftext: string;
-    score: number;
-    subreddit: string;
-  }>
-): Promise<ArticleScoreResult[]> {
-  const context = buildCompanyContext(company, competitorName, competitorDomain);
-
-  const response = await getClient().chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content: `You are scoring Reddit posts for competitive intelligence relevance. Context:\n${context}
-
-Score based on: customer sentiment signal, product feedback, brand perception. Negative sentiment (complaints, warnings) is higher priority. is_noise: true for off-topic posts. Return JSON with a "results" array.`,
-      },
-      {
-        role: "user",
-        content: JSON.stringify(posts),
-      },
-    ],
-  });
-
-  const raw = response.choices[0].message.content ?? '{"results":[]}';
-  const parsed = JSON.parse(raw) as { results: ArticleScoreResult[] };
-  return parsed.results ?? [];
-}
-
 export async function summarizeJob(
   company: UserCompany,
   competitorName: string,

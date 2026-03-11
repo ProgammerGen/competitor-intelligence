@@ -7,7 +7,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Competitor Intelligence",
-  description: "Monitor your competitors across products, news, Reddit, and job postings",
+  description: "Monitor your competitors across products, news, web mentions, and job postings",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

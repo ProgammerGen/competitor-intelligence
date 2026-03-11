@@ -7,7 +7,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { runProductsModule } from "./products";
 import { runNewsModule } from "./news";
-import { runRedditModule } from "./reddit";
+import { runWebSearchModule } from "./webSearch";
 import { runJobsModule } from "./jobs";
 
 type ModuleType = "news" | "product_launch" | "review" | "job_posting";
@@ -53,7 +53,7 @@ export async function runModule(
           await runNewsModule(competitor, company);
           break;
         case "review":
-          await runRedditModule(competitor, company);
+          await runWebSearchModule(competitor, company);
           break;
         case "job_posting":
           await runJobsModule(competitor, company);

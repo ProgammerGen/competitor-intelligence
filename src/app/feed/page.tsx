@@ -37,7 +37,7 @@ interface EventRow {
 const MODULE_LABELS: Record<string, string> = {
   news: "News",
   product_launch: "Product Launch",
-  review: "Reddit",
+  review: "Web Search",
   job_posting: "Job Posting",
 };
 

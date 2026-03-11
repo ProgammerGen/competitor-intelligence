@@ -1,27 +1,26 @@
 import { db } from "@/lib/db";
 import { events, relevanceScores } from "@/lib/db/schema";
 import type { TrackedCompetitor, UserCompany } from "@/lib/db/schema";
-import { searchRedditPosts } from "@/lib/services/reddit";
-import { scoreRedditPosts } from "@/lib/services/openai";
+import { searchWebMentions } from "@/lib/services/webSearch";
+import { scoreArticles } from "@/lib/services/openai";
 import { computeRecencyPenalty, computeFinalScore } from "@/lib/scoring";
 
-export async function runRedditModule(
+export async function runWebSearchModule(
   competitor: TrackedCompetitor,
   company: UserCompany
 ): Promise<void> {
-  const posts = await searchRedditPosts(competitor.name, company.industry);
-  if (posts.length === 0) return;
+  const results = await searchWebMentions(competitor.name);
+  if (results.length === 0) return;
 
-  const payload = posts.map((p, i) => ({
+  const payload = results.map((r, i) => ({
     index: i,
-    id: p.id,
-    title: p.title,
-    selftext: p.selftext.length > 50 ? p.selftext.slice(0, 1000) : "",
-    score: p.score,
-    subreddit: p.subreddit,
+    title: r.title,
+    description: r.description,
+    url: r.url,
+    publishedAt: r.publishedAt,
   }));
 
-  const scores = await scoreRedditPosts(
+  const scores = await scoreArticles(
     company,
     competitor.name,
     competitor.domain,
@@ -29,11 +28,11 @@ export async function runRedditModule(
   );
 
   for (const score of scores) {
-    const post = posts[score.index];
-    if (!post) continue;
+    const result = results[score.index];
+    if (!result) continue;
     if (score.is_noise) continue;
 
-    const eventDate = new Date(post.created_utc * 1000);
+    const eventDate = new Date(result.publishedAt);
     const recencyPenalty = computeRecencyPenalty(eventDate);
     if (recencyPenalty === -100) continue;
 
@@ -44,18 +43,16 @@ export async function runRedditModule(
     );
     if (finalScore < 25) continue;
 
-    const permalink = `https://reddit.com${post.permalink}`;
-
     const inserted = await db
       .insert(events)
       .values({
         competitorId: competitor.id,
         moduleType: "review",
-        title: post.title,
-        sourceUrl: permalink,
+        title: result.title,
+        sourceUrl: result.url,
         eventOccurredAt: eventDate,
-        rawData: post,
-        externalId: post.id,
+        rawData: result,
+        externalId: result.url,
       })
       .onConflictDoNothing()
       .returning({ id: events.id });
