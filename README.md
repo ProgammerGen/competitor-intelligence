@@ -15,7 +15,7 @@ git clone <repo>
 cd competitor-intelligence-app
 npm install
 cp .env.example .env.local
-# Fill in DATABASE_URL, OPENAI_API_KEY, NEWS_API_KEY
+# Fill in DATABASE_URL, OPENAI_API_KEY, NEWS_API_KEY, TAVILY_API_KEY
 npm run db:push   # push schema to Postgres
 npm run dev       # starts at http://localhost:3000
 ```
@@ -27,9 +27,8 @@ npm run dev       # starts at http://localhost:3000
 | `DATABASE_URL` | PostgreSQL connection string (Railway → Variables tab) |
 | `OPENAI_API_KEY` | platform.openai.com |
 | `NEWS_API_KEY` | newsapi.org/register |
+| `TAVILY_API_KEY` | tavily.com — free tier: 1000 searches/month (used by Module C and Module A fallback) |
 | `CRON_SECRET` | Auto-injected by Vercel — leave blank locally |
-
-> **Web Search (Module C)** uses the Tavily Search API. Set `TAVILY_API_KEY` in your environment — sign up at tavily.com (free tier: 1000 searches/month).
 
 ---
 
@@ -105,7 +104,7 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 
 | Module | Status | Notes |
 |---|---|---|
-| A — Product Launches | ✅ Working | 4-strategy fetch: Shopify `/products.json` → WooCommerce Store API → Sitemap XML → HTML scraping (JSON-LD + schema.org) |
+| A — Product Launches | ⚠️ Partial | 4-strategy fetch (Shopify → WooCommerce → Sitemap → HTML scrape) + Tavily fallback; WAF-blocked sites return web mentions instead of structured product data |
 | B — News | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
 | C — Web Search | ✅ Working | Tavily Search API, past-30-day web mentions, batched LLM scoring, suppresses score < 25 |
 | D — Job Postings | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
@@ -182,13 +181,15 @@ final_score = round(
 
 ### Recency decay
 
-| Age | Penalty | Recency component |
-|---|---|---|
-| 0–7 days | 0 | 100 |
-| 8–30 days | −10 | 90 |
-| 31–60 days | −20 | 80 |
-| 61–90 days | −30 | 70 |
-| 90+ days | Suppressed | Not shown in feed |
+| Age | Penalty | Recency component | Notes |
+| --- | --- | --- | --- |
+| 0–7 days | 0 | 100 | |
+| 8–30 days | −10 | 90 | |
+| 31–60 days | −20 | 80 | |
+| 61–90 days | −30 | 70 | |
+| 91–365 days | −30 (capped) | 70 | Product launches only — shown in feed at reduced rank |
+| 90+ days | Suppressed | Not shown | News, web search, job postings |
+| 365+ days | Excluded | Not fetched | Products filtered out before insert |
 
 ### Context feeding
 
