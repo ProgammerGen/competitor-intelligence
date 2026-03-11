@@ -2,90 +2,102 @@
 
 Monitor your e-commerce competitors across product launches, news, Reddit, and job postings. Events are scored for relevance and surfaced in a ranked, signal-to-noise–filtered feed.
 
-## Live URL
-
-*(Add Railway URL after deployment)*
+**Live URL:** *(fill in after Vercel deployment)*
 
 ---
 
-## Setup (Local)
+## Setup (local dev)
 
-**Prerequisites:** Node 20+, PostgreSQL running locally or via Docker.
+**Prerequisites:** Node 20+, PostgreSQL (local or Railway).
 
 ```bash
 git clone <repo>
 cd competitor-intelligence-app
 npm install
 cp .env.example .env.local
-# Fill in all env vars in .env.local
-npm run db:push   # Creates schema in your Postgres instance
-node --import tsx/esm server.ts  # Starts app + cron scheduler
+# Fill in DATABASE_URL, OPENAI_API_KEY, NEWS_API_KEY
+npm run db:push   # push schema to Postgres
+npm run dev       # starts at http://localhost:3000
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
-
-### Environment Variables
+### Environment variables
 
 | Variable | Source |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_URL` | PostgreSQL connection string (Railway → Variables tab) |
 | `OPENAI_API_KEY` | platform.openai.com |
 | `NEWS_API_KEY` | newsapi.org/register |
-| `REDDIT_CLIENT_ID` | reddit.com/prefs/apps (script app) |
-| `REDDIT_CLIENT_SECRET` | same as above |
+| `CRON_SECRET` | Auto-injected by Vercel — leave blank locally |
+
+> **No Reddit credentials required.** The Reddit module uses the public JSON API — no app registration needed.
 
 ---
 
 ## Architecture Overview
 
-**Stack:** Next.js 14 (App Router) + Drizzle ORM + PostgreSQL + node-cron + gpt-4o-mini.
+**Stack:** Next.js 16 (App Router) · Drizzle ORM · PostgreSQL · gpt-4o-mini · Vercel Cron · Railway (database only)
 
-Single Railway service runs a custom `server.ts` — a persistent Node.js process that boots Next.js and initializes `node-cron`. This is intentional: Vercel's serverless functions can't run persistent cron jobs.
+**Deployment:**
+
+```
+Vercel (Next.js serverless)          Railway
+├── All pages + API routes    ←DB→   └── PostgreSQL addon
+└── /api/cron/daily  ← triggered by Vercel Cron at 10:00 UTC daily
+```
+
+`server.ts` and `node-cron` remain in the repo for local reference but are not used in production. Vercel Cron calls `GET /api/cron/daily` on schedule. Manual module runs from the monitoring page use `after()` (Next.js 16) to fire-and-forget without blocking the HTTP response.
 
 **Data flow:**
-1. User completes setup wizard (domain → AI-enriched profile → confirmed competitors)
-2. Daily cron at 06:00 ET (+ manual triggers) runs 4 monitoring modules per competitor
+
+1. User completes setup wizard: domain → AI-enriched profile → confirmed competitor list
+2. Vercel Cron (daily) or manual "Run Now" triggers 4 monitoring modules per competitor
 3. Each module inserts events idempotently and scores them via gpt-4o-mini
-4. Feed page queries `events JOIN relevance_scores` ordered by `final_score DESC`
+4. Feed queries `events JOIN relevance_scores` ordered by `final_score DESC`
 
-### Key Schema Decisions
+### Key schema decisions
 
-**`events` table** stores all signals normalized to a common shape:
-- `external_id` is the module-specific deduplication key (Shopify product ID, article URL, Reddit post ID, job URL)
-- `UNIQUE(competitor_id, module_type, external_id)` is the idempotency index
-- `raw_data JSONB` stores the full original payload for score recomputation
-- `source_url NOT NULL` — enforced at the DB level, never null
+`events` table — all intelligence signals normalized to a common shape:
 
-**`relevance_scores`** is separate from `events` to allow recomputation without re-fetching sources.
+- `external_id`: module-specific deduplication key (Shopify product ID · article URL · Reddit post ID · job URL)
+- `UNIQUE(competitor_id, module_type, external_id)`: the idempotency index — schema-level, not application-level
+- `raw_data JSONB`: full original payload stored for score recomputation without re-fetching
+- `source_url NOT NULL`: enforced at DB level, never null
 
-**`product_snapshots`** stores the full Shopify catalog per sync run. Pruned to 30 days by the products module. Events table holds the permanent delta history.
+`relevance_scores` is separate from `events` to allow recomputation independently of event data.
+
+`product_snapshots` stores full catalogs per sync. Pruned to 30 days. The `events` table holds the permanent delta history.
 
 ---
 
 ## Data Architecture Q&A
 
-### Q1 — Idempotency
+### Q1 — Idempotency: how does the schema prevent duplicate events if the daily job runs twice?
 
-`UNIQUE(competitor_id, module_type, external_id)` on the `events` table, combined with `.onConflictDoNothing()` on every INSERT. If the daily job retries, duplicate INSERTs silently succeed (no row inserted). The `.returning()` check then returns an empty array, so no duplicate `relevance_scores` row is created either. The constraint lives in `src/lib/db/schema.ts` in the `events` table definition.
+`UNIQUE(competitor_id, module_type, external_id)` on the `events` table, combined with `.onConflictDoNothing()` on every INSERT. If the daily job retries, duplicate INSERTs silently succeed without inserting a row. The `.returning()` check then returns an empty array, so no duplicate `relevance_scores` row is created either.
 
-### Q2 — Snapshot Storage
+The constraint lives in `src/lib/db/schema.ts`. The enforcement is at the schema level — application code cannot accidentally bypass it.
 
-20 competitors × 500 products × ~1 KB average = ~10 MB per sync run.  
-Daily syncs: 10 MB × 365 days = ~3.6 GB/year.
+### Q2 — Snapshot storage: 20 competitors × 500 products — how much per year and what's the strategy?
 
-**Strategy:** The products module deletes snapshots older than 30 days after each successful sync (`DELETE WHERE synced_at < now() - 30d`). Only the rolling 30-day window is retained for diffing. The `events` table preserves the permanent record of what launched and when — you don't need the raw snapshot to know a product launched.
+**Estimate:** 20 competitors × 500 products × ~1 KB = 10 MB per sync. Daily: 10 MB × 365 = **~3.6 GB/year** without pruning.
 
-For 20 competitors at 30-day retention: ~300 MB, well within Railway's free tier.
+**Strategy:** The products module deletes snapshots with `synced_at < now() - 30 days` after each successful sync. This caps live snapshot storage at ~300 MB (30-day rolling window) regardless of runtime. The `events` table retains the permanent record of what launched and when — no raw snapshot is needed to answer "what products launched this quarter."
 
-### Q3 — Score Recomputation
+### Q3 — Score recomputation: how do you re-score historical events without re-fetching source data?
 
-`events.raw_data` (JSONB) stores the complete original payload from the source API. `relevance_scores` is a separate table with a UNIQUE constraint on `event_id`. To recompute:
+`events.raw_data` (JSONB) stores the complete original payload from each source. `relevance_scores` is a separate table with a UNIQUE constraint on `event_id`. To recompute with an improved prompt:
 
-1. Query all events with their `raw_data`
-2. Re-run the scoring prompt (with updated system prompt) against each batch
-3. `INSERT INTO relevance_scores ... ON CONFLICT (event_id) DO UPDATE SET ...`
+```typescript
+const allEvents = await db.select().from(events);
+for (const event of allEvents) {
+  const score = await rescoreWithNewPrompt(event.raw_data, companyContext);
+  await db.insert(relevanceScores)
+    .values({ eventId: event.id, ...score })
+    .onConflictDoUpdate({ target: relevanceScores.eventId, set: score });
+}
+```
 
-No source re-fetching needed. The schema was designed for this from day one.
+No HTTP requests to original sources. Scoring is a pure function over stored data — the schema was designed for this from the start.
 
 ---
 
@@ -93,77 +105,210 @@ No source re-fetching needed. The schema was designed for this from day one.
 
 | Module | Status | Notes |
 |---|---|---|
-| A — Product Launches | ✅ Working | Shopify `/products.json` diff, idempotent, batched LLM scoring |
-| B — News | ✅ Working | NewsAPI, 20 articles per competitor, single batched LLM call |
-| C — Reddit Reviews | ✅ Working | OAuth client credentials, subreddit inference from industry |
-| D — Job Postings | ⚠️ Partial | HTML scraping via cheerio; JS-rendered career pages (most modern sites) return empty. See below. |
+| A — Product Launches | ✅ Working | 4-strategy fetch: Shopify `/products.json` → WooCommerce Store API → Sitemap XML → HTML scraping (JSON-LD + schema.org) |
+| B — News | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
+| C — Reddit | ✅ Working | Public Reddit JSON API (no OAuth), industry-inferred subreddits, filters posts with score < 5 |
+| D — Job Postings | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
 
-**Job postings caveat:** The cheerio scraper works on server-rendered career pages. Most modern brands (Shopify-powered stores especially) use React-rendered job boards that return empty HTML to a basic `fetch()`. In production, this would use Playwright/Puppeteer or a dedicated API like Proxycurl. For this build, the module gracefully returns 0 results and logs it — no crash, no user-visible error.
+**Job postings caveat:** The cheerio scraper works on server-rendered career pages. Most modern brands use React/Next.js job boards that return empty HTML to a plain `fetch()`. In production this would use Playwright or Proxycurl. The module fails gracefully — 0 results logged, no crash, no user-visible error.
+
+**Product launches caveat:** Sites with WAF/bot protection (403/429 responses on all 4 strategies) cannot be scraped. Major retailers commonly block automated requests.
+
+---
+
+## Requirements Gap Analysis
+
+### Fully implemented ✅
+
+- Step 1: all 5 company profile fields, AI enrichment from homepage scrape, editable form, confirm CTA
+- Step 2: competitor list with name/domain/score/why_similar, remove, add custom, confirm and trigger modules
+- Step 3: all 4 required modules running and storing events with source URL, timestamps, relevance score, module type
+- Step 4: feed with all required card fields, competitor/module/score filters, sort by relevance and date, empty + error states
+- Relevance scoring: signal 50% + recency 30% + sentiment 20%, decay table exact to spec, suppress 90+ days
+- Context feeding: company name, industry, target customer profile, why_customers_buy fed to every scoring prompt
+- Batching: news and Reddit scored in a single LLM call per competitor (spec requirement)
+- Idempotency: `UNIQUE(competitor_id, module_type, external_id)` enforced at schema level
+- All 7 required tables: users, user_companies, tracked_competitors, product_snapshots, events, relevance_scores, module_runs
+- Deployment: Vercel (app) + Railway (PostgreSQL) + Vercel Cron (daily scheduler)
+- Monitoring page: module status grid, last-run timestamps, Run Now triggers per module, error states
+- Competitor management: add/remove competitors from monitoring page, change company resets all data
+
+### Gaps / partial ⚠️
+
+| Gap | Spec requirement | Status | Fix |
+|---|---|---|---|
+| Similarity score not inline-editable | "Similarity score: 0–100 (editable)" | Displayed as badge only | Add `<input type="number">` per competitor row |
+| Job fields: no department or location | Store title, department, location, URL, summary | Only title + URL + summary stored | Parse from HTML; not reliably available on static pages |
+| Detected timestamp not in feed | Both event timestamp and detected timestamp required | Only `event_occurred_at` shown | Add second timestamp to FeedCard |
+| Sort by sentiment | "Sort by: relevance (default), date, sentiment" | Score and date only | `orderBy(desc(relevanceScores.sentimentScore))` |
+| Reddit: public API vs OAuth | "requires app registration at reddit.com/prefs/apps" | Uses public JSON API — no credentials | Register app for higher rate limits; public API is functional |
+
+### Out of scope (extra credit — not built)
+
+- Headcount tracking (Proxycurl/LinkedIn)
+- Leadership change detection
+- Newsletter tracking — architectural writeup below
 
 ---
 
 ## What I Would Build Next (hours 21–30)
 
-1. **Playwright for job scraping** — Replace cheerio with headless browser to handle JS-rendered career pages. Biggest gap in Module D.
-2. **Relevance score recomputation endpoint** — `POST /api/events/rescore` to re-score all historical events when the prompt improves.
-3. **Email digest** — Daily summary of events above score 60, sent via Resend or Postmark.
-4. **Multi-user auth** — Clerk or Auth.js. The schema already has a `users` table and all data traces through `user_company_id`, so the tenant isolation pattern is already in place.
-5. **Competitor headcount tracking** — Weekly Proxycurl snapshot of LinkedIn employee count, flagging >5% month-over-month changes.
-6. **Score calibration review** — The gpt-4o-mini scoring prompt needs A/B testing. Current version can over-score generic brand mentions if the company name is distinctive.
+1. **Playwright for job scraping** — replace cheerio with a headless browser. Biggest gap in Module D.
+2. **Fix similarity score editing** — number input per competitor row in Step 2.
+3. **Show detected_at in feed cards** — add second timestamp line alongside event timestamp.
+4. **Sort by sentiment** — third sort option in feed filter bar.
+5. **Relevance score recomputation endpoint** — `POST /api/events/rescore` to re-score all historical events when the prompt improves; using `raw_data` already stored.
+6. **Deeper context signals in scoring** — geographic footprint, category adjacency, customer segment overlap fed into the LLM prompt (see Relevance Scoring section).
+7. **Email digest** — daily summary of events above score 60, sent via Resend or Postmark.
+8. **Cursor-based pagination** — replace offset pagination in the feed with keyset pagination on `(final_score, id)` for consistent performance at scale.
+9. **NewsAPI domain filtering** — `domains=` param to reduce off-topic results for brands that appear in unrelated articles.
 
 ---
 
-## Relevance Scoring Notes
+## Relevance Scoring
 
-**Approach:** Three-component weighted formula:
+### Formula
 
 ```
-final_score = signal_strength × 0.5 + recency_score × 0.3 + sentiment_normalized × 0.2
+recency_component  = 100 + recency_penalty             // range: 70–100
+sentiment_norm     = (sentiment_score + 1) / 2 * 100   // –1.0..+1.0 → 0..100
+
+final_score = round(
+  signal_strength   × 0.50 +
+  recency_component × 0.30 +
+  sentiment_norm    × 0.20
+)
 ```
 
-- **Signal strength (50%):** LLM-assigned 0–100 based on the scoring guide in the spec. Uses a company context block injected into every prompt (company name, industry, target customer, why customers buy, competitor name/domain).
-- **Recency (30%):** Deterministic decay: 0–7d → 0 penalty, 8–30d → −10, 31–60d → −20, 61–90d → −30, 90+d → suppressed (not stored in feed).
-- **Sentiment (20%):** LLM-assigned −1.0 to +1.0, normalized to 0–100. Negative events (e.g. product recalls, layoffs) score higher, which matches the spec's intent: bad news for a competitor is signal-worthy.
+### Recency decay
 
-**Context feeding:** All scoring prompts include the user's company profile. The LLM can therefore distinguish "competitor launched a product in your exact category" from "competitor launched a product in a tangential category." This is the most important lever for signal quality.
+| Age | Penalty | Recency component |
+|---|---|---|
+| 0–7 days | 0 | 100 |
+| 8–30 days | −10 | 90 |
+| 31–60 days | −20 | 80 |
+| 61–90 days | −30 | 70 |
+| 90+ days | Suppressed | Not shown in feed |
 
-**Batching:** All articles for a single competitor are sent in one prompt call. This reduces cost and enables relative calibration — the model scores articles against each other within the same context window, not in isolation.
+### Context feeding
 
-**Known failure modes:**
-- Small/obscure competitors with little news coverage return mostly noise from NewsAPI. The `is_noise` flag and the 25-point floor catch most of it.
-- gpt-4o-mini can conflate two companies with similar names. Mitigated by including the domain in the context block.
-- Reddit scraping misses LinkedIn/Twitter-native discussions. Known gap.
-- Job page scraping misses JS-rendered sites (see Module D caveat above).
+Every scoring prompt includes a `buildCompanyContext()` block:
 
-**Deeper context signals I'd add with more time:**
-- **User's own hiring signals:** If your company is hiring 5 engineers in a new geography, a competitor's product launch in that geography jumps from moderate to high signal.
-- **Geographic footprint overlap:** A competitor expanding into the UK is high signal if that's your primary market; low signal if it's not. Requires the user to specify their primary markets in the Step 1 profile (currently captured in `geography` but not used in scoring context).
-- **Category adjacency:** Infer from the product catalog (Module A) which categories the competitor is moving into, weight news about those categories higher.
-- **Segment overlap score:** Compare `targetCustomer` profiles between user and competitor. Two brands targeting the same age range and geography in the same industry get higher event weights.
+- User company: name, industry, description
+- Target customer: age range, geography, personality traits
+- Why customers buy (value proposition)
+- Competitor: name and domain
+
+This ensures the model scores articles relative to what matters to *this specific brand*. A funding round for a direct competitor in the same category scores significantly higher than the same event for a tangential player.
+
+### Batching
+
+All articles for a single competitor are sent in one LLM call. The model returns a `{ "results": [...] }` array matching the input by index. Benefits: fewer API calls (lower cost) + relative calibration (model compares articles against each other within one context window, producing more consistent rankings).
+
+### Known failure modes
+
+- **LLM type coercion:** gpt-4o-mini occasionally returns `signal_strength` as a string (`"neutral"`) when the prompt uses ambiguous language. Fixed with: (1) explicit type specification in prompts, (2) defensive `typeof` coercion before every DB insert.
+- **Company name ambiguity:** gpt-4o-mini can conflate two brands with similar names. Mitigated by including the competitor domain in the context block.
+- **Small competitor coverage:** Obscure brands with minimal news coverage return mostly noise from NewsAPI. The `is_noise` flag and 25-point floor catch most of it, but expect low event volume for less-known competitors.
+- **Batch calibration drift:** In a 20-article batch spanning noise to critical events, mid-range articles can be miscalibrated relative to each other. A two-pass approach (filter noise first, calibrate signal second) would improve this.
+
+### Deeper context signals (not yet implemented)
+
+The spec explicitly calls these out as extra credit. Here is how I would implement each:
+
+- **Customer segment overlap:** Parse competitor's product descriptions and infer target demographics. If a competitor launches for the same age/geography segment as the user, boost `signal_strength` context by +15 in the prompt.
+- **Geographic footprint:** The user's `geography` field is already stored. Feed it into scoring: *"The user operates primarily in {geography}. A competitor expanding into that market should be scored Critical; expansion elsewhere is Moderate."*
+- **Category adjacency:** Infer categories from Step 1 profile and the product catalog (Module A). Weight news about direct-category moves higher than adjacent-category moves.
+- **Own hiring signals:** Run Module D on the user's own careers page. If the user is hiring in a new geography or product area, competitor news in that same area becomes high signal. This is one loop deeper than any competitor-only monitoring and is the kind of signal that separates intelligence platforms from news aggregators.
 
 ---
 
-## Newsletter Tracking (Architectural Note)
+## Newsletter Tracking (architectural writeup — no code)
 
-To track competitor newsletters:
+### Ingestion
 
-**Ingestion:** Create a dedicated email address per competitor (e.g. `brandname@your-intel-domain.com`) using Postmark or Mailgun inbound routing. Sign up for newsletters from a clean inbox so there's no link back to your company.
+Create a dedicated email address per competitor (`intel+allbirds@yourdomain.com`). Use a transactional email provider with inbound parsing (SendGrid Inbound Parse, Postmark Inbound) to receive emails as HTTP POST webhooks. Each webhook fires `POST /api/webhooks/newsletter`.
 
-**Storage:** Each inbound email webhook fires a `POST /api/newsletters/ingest` route. Store the raw HTML and plain text in a `newsletters` table (competitor_id, received_at, subject, html_body, text_body).
+### Storage
 
-**Analysis:** Run gpt-4o-mini on the text body: extract new product mentions, promotional strategy (discount depth, urgency framing), and content themes. Score like other events.
+```sql
+newsletters (
+  id           uuid PRIMARY KEY,
+  competitor_id uuid REFERENCES tracked_competitors(id),
+  received_at  timestamp,
+  subject      text,
+  body_html    text,
+  body_text    text,
+  from_email   text
+)
+```
 
-**Legal:** Subscribing to a public newsletter is legal. Processing it for competitive intelligence is standard practice. Do not scrape subscription-gated content or forward newsletters publicly.
+### Analysis
 
-**Operational risk:** Newsletters from Klaviyo/Mailchimp embed tracking pixels that can identify the subscriber. Use a privacy proxy or a plain-text email client to avoid revealing yourself to the competitor's ESP.
+On receipt, run gpt-4o-mini against `body_text` with the same `buildCompanyContext()` block. Extract: product announcements, promotional signals, pricing changes, tone shifts. Score using the same relevance framework. Store as an `event` with `module_type = 'newsletter'` and `external_id = hash(subject + received_at)` for idempotency.
+
+### Legal and operational considerations
+
+- Subscribing to publicly available newsletters with your own email is legal in most jurisdictions.
+- CAN-SPAM (US) and GDPR (EU) require honoring unsubscribe requests. Treat monitoring addresses as real subscriptions.
+- Do not republish newsletter content externally. Internal intelligence use only.
+- Klaviyo/Mailchimp embed tracking pixels that reveal the subscriber's email to the competitor's ESP. Use a privacy-aware email proxy or strip tracking pixels before storage.
+- Cost at scale: 20 competitors × 1 email/day × ~$0.0005/LLM call ≈ $0.01/day.
 
 ---
 
 ## AI Tool Usage
 
-Built with Claude Code (claude-sonnet-4-6) for scaffolding, architecture decisions, and implementation. Every file was read and understood before being committed. The key decisions I'd defend on the debrief call:
+Claude Code (Anthropic) was used throughout — scaffolding, debugging, refactoring, and reviewing decisions.
 
-- **Why Drizzle over Prisma:** TypeScript-native, no generated client, better JSONB ergonomics.
-- **Why Railway over Vercel:** Persistent process needed for node-cron. Vercel serverless functions have cold starts and time limits that make cron unreliable.
-- **Why batched LLM calls:** Cost efficiency + relative score calibration. A single call scoring 20 articles together produces more consistent rankings than 20 isolated calls.
-- **Why separate `relevance_scores` table:** Enables recomputation without re-fetching. The events table is append-only; the scores table is overwriteable.
+**How output was validated:**
+
+- Every generated file was read and understood before accepting
+- Architectural decisions (schema idempotency, snapshot pruning, scoring formula, 4-strategy product fetching waterfall) were independently reasoned through before implementation
+- Bugs introduced by AI output were caught and fixed through TypeScript compiler errors and local testing:
+  - `signal_strength` returning as string `"neutral"` from the LLM → fixed with explicit prompt type specification and `typeof` guards
+  - Cheerio `.each()` callback returning `number` from `push()` → fixed with explicit curly braces
+  - `??` and `||` operator precedence error in price normalization → fixed with parentheses
+- The scoring formula, context feeding approach, and deduplication strategy are defensible from first principles
+
+**What I would explain on the debrief call:**
+
+- **Why Drizzle over Prisma:** TypeScript-native, no generated client, better JSONB ergonomics, lighter runtime overhead.
+- **Why Vercel Cron over node-cron on Railway:** Vercel Cron is managed, zero infrastructure, survives deployments automatically. node-cron required a persistent process — a stateful dependency that complicates zero-downtime deploys.
+- **Why batched LLM calls:** Cost efficiency + relative score calibration within one context window.
+- **Why separate `relevance_scores` table:** Decouples event storage (append-only) from scoring (overwriteable). Enables prompt iteration without data loss.
+- **Why public Reddit API over OAuth:** No credentials to manage, simpler setup, sufficient for monitoring 5–20 competitors. Trade-off: max 25 results per request vs higher limits with OAuth.
+
+---
+
+## Release Notes
+
+### v1.0.0
+
+**Features shipped:**
+
+- Company profile setup — AI enrichment from homepage scrape, fully editable before confirmation
+- Competitor discovery — LLM returns 5–10 competitors with similarity scores and reasoning
+- Module A (Product Launches) — 4-strategy product fetch (Shopify → WooCommerce → Sitemap → HTML scrape), snapshot diffing, idempotent inserts
+- Module B (News) — NewsAPI, 20 articles per competitor, single batched LLM scoring call, 25-point noise floor
+- Module C (Reddit) — public JSON API, industry-inferred subreddits, score ≥ 5 filter, sentiment scoring
+- Module D (Job Postings) — cheerio scraper, strategic signal summarization, graceful failure on JS-rendered pages
+- Relevance scoring — signal (50%) + recency decay (30%) + sentiment (20%), 90-day suppress, context-aware LLM prompts
+- Intelligence feed — unified ranked view, filter by competitor/module/score, sort by relevance or date, infinite scroll
+- Module status dashboard — per-competitor per-module status grid, last-run timestamps, Run Now buttons, error states
+- Competitor management — add/remove competitors, change company (full data reset)
+
+**Architecture:**
+
+- Next.js 16 (App Router) + Drizzle ORM + PostgreSQL
+- 7-table schema with idempotency constraints and JSONB raw data storage
+- Deployed to Vercel (app) + Railway (PostgreSQL); Vercel Cron replaces node-cron
+- `after()` used for fire-and-forget module execution on Vercel serverless
+
+**Known limitations in v1.0.0:**
+
+- Job module returns empty results on JS-rendered career pages
+- Product detection blocked by WAF/bot protection on major retailer sites
+- Similarity score is display-only in the competitor list (not inline-editable)
+- Feed shows event timestamp only; detected_at not displayed
+- Sort by sentiment not available
