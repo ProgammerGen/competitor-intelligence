@@ -2,13 +2,13 @@
 
 Monitor your e-commerce competitors across product launches, news, web mentions, and job postings. Events are scored for relevance and surfaced in a ranked, signal-to-noise–filtered feed.
 
-**Live URL:** *(fill in after Vercel deployment)*
+**Live URL:** [competitor-intelligence-zeta.vercel.app](https://competitor-intelligence-zeta.vercel.app/)
 
 ---
 
 ## Setup (local dev)
 
-**Prerequisites:** Node 20+, PostgreSQL (local or Railway).
+**Prerequisites:** Node 22+, PostgreSQL (local or Railway).
 
 ```bash
 git clone <repo>
