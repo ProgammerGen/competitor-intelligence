@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { IntelligencePipelineVisual } from "@/components/IntelligencePipelineVisual";
 import {
   ArrowRight,
   Building2,
@@ -418,11 +419,24 @@ export default function CompanySetupPage() {
               </div>
             </div>
 
+            {/* Intelligence pipeline */}
+            <IntelligencePipelineVisual highlightStep={1} />
+
             {/* What happens next */}
             <div className="card-elevated p-5 bg-muted/30">
               <h3 className="text-sm font-semibold mb-3">What happens next?</h3>
-              <p className="text-xs text-muted-foreground mb-3">
-                Once you confirm, we&apos;ll use this profile to discover your competitors and start monitoring them with these four intelligence modules:
+
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-4">
+                <p className="text-xs text-blue-900 leading-relaxed">
+                  <span className="font-semibold">Product catalog:</span> After you confirm, we&apos;ll
+                  automatically fetch your product catalog from your website (works with Shopify stores).
+                  If we can&apos;t detect products, you can add them manually. Your products help AI
+                  identify which competitor events directly affect your specific offerings.
+                </p>
+              </div>
+
+              <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+                These modules power your feed
               </p>
               <div className="grid grid-cols-2 gap-3">
                 {[

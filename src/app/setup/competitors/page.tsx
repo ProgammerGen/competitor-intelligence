@@ -23,6 +23,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { IntelligencePipelineVisual } from "@/components/IntelligencePipelineVisual";
 
 const DISCOVERY_STEPS = [
   { text: "Reading your company profile...", delay: 0 },
@@ -288,6 +289,9 @@ export default function CompetitorsSetupPage() {
 
         {!loading && !error && (
           <div className="space-y-3">
+            {/* Intelligence pipeline */}
+            <IntelligencePipelineVisual highlightStep={3} />
+
             {/* Understanding scores */}
             <div className="card-elevated p-4 mb-2">
               <div className="flex items-start gap-2">
@@ -331,7 +335,15 @@ export default function CompetitorsSetupPage() {
                     </div>
                     <div>
                       <span className="font-semibold text-sm block leading-tight">{c.name}</span>
-                      <span className="text-[11px] text-muted-foreground">{c.domain}</span>
+                      <a
+                        href={`https://${c.domain}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-primary/70 hover:text-primary hover:underline transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {c.domain}
+                      </a>
                     </div>
                     {c.similarityScore === -1 ? (
                       <Badge className="text-[11px] border bg-muted animate-pulse" variant="outline">
@@ -404,7 +416,7 @@ export default function CompetitorsSetupPage() {
               <p className="text-xs text-muted-foreground mb-4">
                 Once you confirm, these four intelligence modules will start collecting data for every selected competitor:
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 {[
                   { icon: Newspaper, label: "News & Press", desc: "Media articles, press releases, and industry coverage" },
                   { icon: ShoppingBag, label: "Products & Pricing", desc: "New product launches, pricing changes, and catalog updates" },
@@ -419,6 +431,15 @@ export default function CompetitorsSetupPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="bg-purple-50 border border-purple-100 rounded-lg p-3">
+                <p className="text-xs text-purple-900 leading-relaxed">
+                  <span className="font-semibold">Product matching:</span> When a competitor launches a new
+                  product, our AI compares it against YOUR catalog and tags which of your products are affected.
+                  You&apos;ll see <span className="font-medium">&ldquo;Affects: Your [Product Name]&rdquo;</span> pills
+                  in the feed — click them for a detailed AI comparison.
+                </p>
               </div>
             </div>
 

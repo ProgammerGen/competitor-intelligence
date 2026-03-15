@@ -287,6 +287,7 @@ export function EventCard({
                     e.stopPropagation();
                     onMatchedProductClick?.(name);
                   }}
+                  title="Click to see an AI-generated comparison between this competitor event and your product"
                   className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5 hover:bg-red-100 hover:ring-red-300 transition-colors cursor-pointer"
                 >
                   <Target className="h-3 w-3" />
@@ -336,7 +337,7 @@ export function EventCard({
                 href={row.event.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-primary/70 hover:text-primary hover:underline transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
                 {isProductLaunch ? "View product" : "View source"} <ExternalLink className="w-3 h-3" />

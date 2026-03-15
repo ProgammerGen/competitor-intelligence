@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ProductComparisonDialog } from "@/components/ProductComparisonDialog";
 import { EventCard } from "@/components/EventCard";
+import { IntelligencePipelineVisual } from "@/components/IntelligencePipelineVisual";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,13 @@ export default function FeedPage() {
     matchedProductName: string;
     row: EventRow;
   } | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem("ci-feed-intro-dismissed")) {
+      setShowWelcome(true);
+    }
+  }, []);
 
   const { data: competitors } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["competitors"],
@@ -165,6 +173,7 @@ export default function FeedPage() {
     isFetchingNextPage,
     isLoading,
     isError,
+    refetch,
   } = useInfiniteQuery<EventRow[]>({
     queryKey: ["events", competitorId, activeTab, minScore, sort],
     queryFn: ({ pageParam = 0 }) => {
@@ -225,6 +234,32 @@ export default function FeedPage() {
           </p>
         </div>
 
+        {/* First-time welcome banner */}
+        {showWelcome && (
+          <div className="card-elevated p-5 mb-6 bg-gradient-to-br from-primary/5 to-purple-50 border-primary/20 animate-fade-in">
+            <IntelligencePipelineVisual highlightStep={5} compact />
+            <div className="mt-4 space-y-2">
+              <p className="text-sm text-foreground leading-relaxed">
+                Your competitors are being monitored. Events are scored <strong>0–100</strong> based on
+                relevance to YOUR company and products.
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Red pills like <span className="inline-flex items-center bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-1.5 py-0 text-[10px] font-medium mx-0.5">Affects: Your Product</span> mean
+                the AI found a direct threat to one of your products. Click for a detailed AI comparison.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.setItem("ci-feed-intro-dismissed", "1");
+                setShowWelcome(false);
+              }}
+              className="mt-3 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Got it, dismiss
+            </button>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-card rounded-xl border border-border/60 p-1.5 shadow-sm">
           {TABS.map((tab) => {
@@ -270,7 +305,7 @@ export default function FeedPage() {
         </div>
 
         {/* Score legend */}
-        <div className="flex items-center gap-4 mb-5 text-[11px]">
+        <div className="flex items-center gap-4 mb-5 text-xs bg-card rounded-lg border border-border/60 px-4 py-2.5">
           <span className="text-muted-foreground font-medium uppercase tracking-wider">Scores:</span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
@@ -289,6 +324,22 @@ export default function FeedPage() {
             <span className="text-muted-foreground">&lt;40 Low</span>
           </span>
         </div>
+
+        {/* Quick stats — skeleton */}
+        {isLoading && (
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="card-elevated p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <Skeleton className="h-7 w-12 mb-1" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Quick stats */}
         {!isLoading && displayEvents.length > 0 && (
@@ -418,8 +469,16 @@ export default function FeedPage() {
           <div className="card-elevated p-8 text-center">
             <p className="text-destructive font-medium">Failed to load feed</p>
             <p className="text-muted-foreground text-sm mt-1">
-              We couldn&apos;t retrieve your competitive signals. Please check your connection and refresh.
+              We couldn&apos;t retrieve your competitive signals. Please check your connection and try again.
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => refetch()}
+            >
+              Retry
+            </Button>
           </div>
         )}
 

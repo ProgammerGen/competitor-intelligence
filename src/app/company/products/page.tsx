@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   ShoppingBag,
   Plus,
   Trash2,
@@ -16,6 +23,7 @@ import {
   Tag,
   Activity,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CompanyProduct {
   id: string;
@@ -37,6 +45,7 @@ export default function CompanyProductsPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<CompanyProduct | null>(null);
 
   const { data: products, isLoading } = useQuery<CompanyProduct[]>({
     queryKey: ["companyProducts"],
@@ -67,6 +76,10 @@ export default function CompanyProductsPage() {
       setTitle("");
       setDescription("");
       setPrice("");
+      toast.success("Product added to your catalog");
+    },
+    onError: () => {
+      toast.error("Failed to add product");
     },
   });
 
@@ -80,6 +93,10 @@ export default function CompanyProductsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companyProducts"] });
+      toast.success("Product removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove product");
     },
   });
 
@@ -91,9 +108,11 @@ export default function CompanyProductsPage() {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ["companyProducts"] });
         setSyncing(false);
+        toast.success("Products synced from your website");
       }, 5000);
     } catch {
       setSyncing(false);
+      toast.error("Failed to sync products");
     }
   };
 
@@ -209,7 +228,7 @@ export default function CompanyProductsPage() {
                           </div>
                         </div>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteProduct.mutate(p.id); }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p); }}
                           className="text-muted-foreground hover:text-destructive transition-colors p-1"
                           title="Remove product"
                         >
@@ -263,7 +282,7 @@ export default function CompanyProductsPage() {
                           </div>
                         </div>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteProduct.mutate(p.id); }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(p); }}
                           className="text-muted-foreground hover:text-destructive transition-colors p-1"
                           title="Remove product"
                         >
@@ -282,6 +301,37 @@ export default function CompanyProductsPage() {
             </div>
           </div>
         )}
+
+        {/* Delete confirmation dialog */}
+        <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Remove product?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to remove &ldquo;{deleteConfirm?.title}&rdquo; from your catalog?
+                Previously matched competitor events will no longer reference this product.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <Button variant="outline" size="sm" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (deleteConfirm) {
+                    deleteProduct.mutate(deleteConfirm.id);
+                    setDeleteConfirm(null);
+                  }
+                }}
+                disabled={deleteProduct.isPending}
+              >
+                {deleteProduct.isPending ? "Removing..." : "Remove"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Add product form */}
         <div className="card-elevated p-5">

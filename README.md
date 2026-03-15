@@ -106,7 +106,7 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 
 | Module | `module_type` | Status | Notes |
 |---|---|---|---|
-| A — Product Launches | `product_launch` | ⚠️ Partial | 4-strategy fetch (Shopify → WooCommerce → Sitemap → HTML scrape) + Tavily fallback; WAF-blocked sites return web mentions instead of structured product data |
+| A — Product Launches | `product_launch` | ✅ Working | 4-strategy fetch (Shopify → WooCommerce → Sitemap → HTML scrape) + Tavily fallback; AI matches competitor products against your catalog and tags affected products in the feed; live AI comparison via "Affects: Your Product" pills |
 | B — News | `news` | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
 | C — Web Search | `review` | ✅ Working | Tavily Search API, past-30-day web mentions, batched LLM scoring, suppresses score < 25 |
 | D — Job Postings | `job_posting` | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
@@ -289,6 +289,43 @@ Claude Code (Anthropic) was used throughout — scaffolding, debugging, refactor
 ---
 
 ## Release Notes
+
+### v1.5.0
+
+**UI/UX Improvements — Intelligence Pipeline Visualization, Toast Notifications & Polish**
+
+- **Intelligence Pipeline Visualization** — New reusable `IntelligencePipelineVisual` component showing the 5-step intelligence pipeline (Company → Products → Competitors → Events Scored → Feed) with active/completed/pending states. Embedded in setup company review step (step 1), setup competitors page (step 3), and feed welcome banner (step 5).
+- **First-time welcome banner on feed** — Dismissible banner (localStorage-persisted) explaining how scoring works, what the 0–100 scale means, and what "Affects: Your Product" pills do. Includes compact pipeline visualization.
+- **Product matching explainer on company profile** — New card on the company profile page explaining how AI matches competitor events against the user's product catalog, with a link to manage products.
+- **Toast notifications** — Installed `sonner` toast library. All mutations across the app now show success/error toasts: adding/removing products, syncing from website, editing/deleting products, triggering modules, adding/removing competitors.
+- **Delete confirmation on product catalog** — Trash icon on the product catalog page now opens a Radix Dialog confirmation instead of deleting immediately.
+- **Feed retry button** — Error state on the feed page now includes a "Retry" button that re-fetches the query.
+- **Score legend improvement** — Score legend on the feed page upgraded from `text-[11px]` to `text-xs` with a subtle card background for better visibility.
+- **Stats skeleton loaders** — Feed page shows skeleton placeholders for the 3-column quick stats grid while loading, instead of hiding the section entirely.
+- **Image preview in product edit** — Product detail edit form shows a small preview thumbnail below the Image URL input. Broken images are hidden automatically.
+- **Tooltip on "Affects" pills** — Hovering over "Affects: Your Product" pills in the feed now shows a tooltip explaining that clicking opens an AI comparison.
+- **Setup page explainers** — Setup company review step includes a blue info callout about auto product fetching (Shopify) and manual fallback. Setup competitors page includes a purple callout explaining product matching and "Affects" pills.
+- **Reset company confirmation dialog** — "Reset company" button on the monitoring page now opens a confirmation dialog warning that all data will be permanently deleted before proceeding.
+- **Link styling** — Domains and URLs across the app (competitor domains, company domain, "View source"/"View product" links in event cards) are now visually styled as clickable links with primary color and hover underline.
+- **Combined product detail API** — Product detail page now fetches product info and related competitor events in a single API call, eliminating the loading waterfall.
+
+**New files:**
+
+- `src/components/IntelligencePipelineVisual.tsx` — Reusable 5-step pipeline visualization component
+
+**Modified files:**
+
+- `src/app/layout.tsx` — Added sonner `<Toaster />` provider
+- `src/app/setup/company/page.tsx` — Pipeline visualization + product fetching explainer
+- `src/app/setup/competitors/page.tsx` — Pipeline visualization + product matching explainer
+- `src/app/feed/page.tsx` — Welcome banner, retry button, score legend, stats skeletons
+- `src/app/company/page.tsx` — Product matching explainer card
+- `src/app/company/products/page.tsx` — Toast notifications, delete confirmation dialog
+- `src/app/company/products/[id]/page.tsx` — Toast notifications, image preview in edit
+- `src/app/monitoring/page.tsx` — Toast notifications for all mutations
+- `src/components/EventCard.tsx` — Tooltip on matched product pills
+
+---
 
 ### v1.4.0
 

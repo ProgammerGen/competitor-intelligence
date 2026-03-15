@@ -3,6 +3,7 @@ import { Inter as Geist } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/components/QueryProvider";
 import { Sidebar } from "@/components/Sidebar";
+import { Toaster } from "sonner";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="min-h-screen" id="app-shell">
             {children}
           </div>
+          <Toaster position="bottom-right" richColors />
         </QueryProvider>
       </body>
     </html>

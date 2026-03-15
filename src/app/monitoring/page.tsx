@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   CheckCircle2,
   XCircle,
   Loader2,
@@ -27,6 +34,7 @@ import {
   Zap,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type ModuleStatus = {
   id: string;
@@ -142,6 +150,7 @@ export default function MonitoringPage() {
   const [addName, setAddName] = useState("");
   const [addDomain, setAddDomain] = useState("");
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
   const competitorRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -166,6 +175,10 @@ export default function MonitoringPage() {
       }),
     onSuccess: () => {
       setTimeout(() => queryClient.invalidateQueries({ queryKey: ["module-status"] }), 500);
+      toast.success("Module triggered");
+    },
+    onError: () => {
+      toast.error("Failed to trigger module");
     },
   });
 
@@ -175,6 +188,10 @@ export default function MonitoringPage() {
     onSuccess: () => {
       setConfirmDelete(null);
       queryClient.invalidateQueries({ queryKey: ["module-status"] });
+      toast.success("Competitor removed");
+    },
+    onError: () => {
+      toast.error("Failed to remove competitor");
     },
   });
 
@@ -211,6 +228,7 @@ export default function MonitoringPage() {
       setAddDomain("");
       setShowAdd(false);
       queryClient.invalidateQueries({ queryKey: ["module-status"] });
+      toast.success("Competitor added — starting data collection");
       if (inserted[0]?.id) {
         setLastAddedId(inserted[0].id);
         await Promise.all(
@@ -224,6 +242,9 @@ export default function MonitoringPage() {
         );
         setTimeout(() => queryClient.invalidateQueries({ queryKey: ["module-status"] }), 500);
       }
+    },
+    onError: () => {
+      toast.error("Failed to add competitor");
     },
   });
 
@@ -294,11 +315,10 @@ export default function MonitoringPage() {
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground hover:text-destructive text-xs"
-                onClick={() => changeCompanyMutation.mutate()}
-                disabled={changeCompanyMutation.isPending}
+                onClick={() => setResetDialogOpen(true)}
               >
                 <RotateCw className="h-3 w-3 mr-1.5" />
-                {changeCompanyMutation.isPending ? "Resetting..." : "Reset company"}
+                Reset company
               </Button>
             </div>
           </div>
@@ -399,7 +419,14 @@ export default function MonitoringPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-base">{row.competitor.name}</h3>
-                    <span className="text-xs text-muted-foreground">{row.competitor.domain}</span>
+                    <a
+                      href={`https://${row.competitor.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary/70 hover:text-primary hover:underline transition-colors"
+                    >
+                      {row.competitor.domain}
+                    </a>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -595,6 +622,36 @@ export default function MonitoringPage() {
             </button>
           )}
         </div>
+
+        {/* Reset company confirmation dialog */}
+        <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Reset company?</DialogTitle>
+              <DialogDescription>
+                This will permanently delete your company profile, all tracked competitors,
+                collected events, scores, and product catalog. You will be redirected to the
+                setup wizard to start fresh. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <Button variant="outline" size="sm" onClick={() => setResetDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  setResetDialogOpen(false);
+                  changeCompanyMutation.mutate();
+                }}
+                disabled={changeCompanyMutation.isPending}
+              >
+                {changeCompanyMutation.isPending ? "Resetting..." : "Yes, reset everything"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

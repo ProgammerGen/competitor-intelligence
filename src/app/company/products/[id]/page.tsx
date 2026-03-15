@@ -25,6 +25,7 @@ import {
   Tag,
   Calendar,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface CompanyProduct {
   id: string;
@@ -78,16 +79,13 @@ export default function ProductDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [comparisonDialog, setComparisonDialog] = useState<EventRow | null>(null);
 
-  const { data: product, isLoading } = useQuery<CompanyProduct>({
+  const { data, isLoading } = useQuery<{ product: CompanyProduct; relatedEvents: EventRow[] }>({
     queryKey: ["companyProduct", id],
     queryFn: () => fetch(`/api/company/products/${id}`).then((r) => r.json()),
   });
 
-  const { data: relatedEvents, isLoading: eventsLoading } = useQuery<EventRow[]>({
-    queryKey: ["companyProductEvents", id],
-    queryFn: () => fetch(`/api/company/products/${id}/events`).then((r) => r.json()),
-    enabled: !!product,
-  });
+  const product = data?.product ?? null;
+  const relatedEvents = data?.relatedEvents;
 
   const updateProduct = useMutation({
     mutationFn: async (data: {
@@ -114,6 +112,10 @@ export default function ProductDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["companyProduct", id] });
       queryClient.invalidateQueries({ queryKey: ["companyProducts"] });
       setEditing(false);
+      toast.success("Product updated");
+    },
+    onError: () => {
+      toast.error("Failed to save changes");
     },
   });
 
@@ -124,6 +126,10 @@ export default function ProductDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["companyProducts"] });
       router.push("/company/products");
+      toast.success("Product deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete product");
     },
   });
 
@@ -257,6 +263,14 @@ export default function ProductDetailPage() {
                 onChange={(e) => setEditImageUrl(e.target.value)}
                 placeholder="https://..."
               />
+              {editImageUrl && (
+                <img
+                  src={editImageUrl}
+                  alt="Preview"
+                  className="mt-2 w-16 h-16 rounded-lg object-cover border border-border/60"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2 pt-2">
               <Button
@@ -341,23 +355,7 @@ export default function ProductDetailPage() {
             )}
           </h2>
 
-          {eventsLoading ? (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="card-elevated p-4">
-                  <div className="flex gap-4">
-                    <Skeleton className="w-1 h-16 rounded-full flex-shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-3 w-32" />
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-full" />
-                    </div>
-                    <Skeleton className="h-8 w-10 rounded-full" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : !relatedEvents || relatedEvents.length === 0 ? (
+          {!relatedEvents || relatedEvents.length === 0 ? (
             <div className="card-elevated p-8 text-center">
               <p className="text-sm text-muted-foreground">
                 No competitor events have been linked to this product yet.

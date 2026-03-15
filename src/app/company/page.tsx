@@ -139,7 +139,14 @@ export default function CompanyPage() {
               </div>
               <div>
                 <h3 className="text-xl font-bold">{company.name}</h3>
-                <p className="text-sm text-muted-foreground">{company.domain}</p>
+                <a
+                  href={`https://${company.domain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary/70 hover:text-primary hover:underline transition-colors"
+                >
+                  {company.domain}
+                </a>
               </div>
             </div>
 
@@ -281,6 +288,34 @@ export default function CompanyPage() {
                 <p className="text-[11px] text-muted-foreground leading-relaxed">{mod.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Product matching explainer */}
+        <div className="card-elevated p-5 mb-4 bg-purple-500/5 border-purple-200/40 animate-fade-in animate-fade-in-delay-2">
+          <div className="flex items-start gap-3">
+            <ShoppingBag className="h-5 w-5 text-purple-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold mb-1">How product matching works</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                When competitors launch new products or make announcements, our AI compares the event against
+                your product catalog. If it finds a direct match, the event gets tagged with{" "}
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2 py-0.5">
+                  <Target className="h-3 w-3" />
+                  Affects: Your Product
+                </span>{" "}
+                in the feed. Click any tag for a detailed AI comparison showing how the competitor&apos;s offering
+                stacks up against yours.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/company/products")}
+              >
+                <ShoppingBag className="h-3.5 w-3.5 mr-1.5" />
+                Manage your products
+              </Button>
+            </div>
           </div>
         </div>
 
