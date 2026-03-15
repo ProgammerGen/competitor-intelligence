@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { ProductComparisonDialog } from "@/components/ProductComparisonDialog";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,10 @@ export default function FeedPage() {
   const [minScore, setMinScore] = useState(0);
   const [sort, setSort] = useState<"score" | "date">("date");
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [comparisonDialog, setComparisonDialog] = useState<{
+    matchedProductName: string;
+    row: EventRow;
+  } | null>(null);
 
   const { data: competitors } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["competitors"],
@@ -211,6 +216,17 @@ export default function FeedPage() {
     staleTime: 60_000,
   });
   const companyName = company?.name ?? "";
+
+  const { data: companyProducts } = useQuery<
+    Array<{ title: string; description?: string | null; price?: string | null; imageUrl?: string | null; productType?: string | null }>
+  >({
+    queryKey: ["companyProducts"],
+    queryFn: () => fetch("/api/company/products").then((r) => r.json()),
+    staleTime: 60_000,
+  });
+
+  const findCompanyProduct = (name: string) =>
+    companyProducts?.find((p) => p.title === name) ?? null;
 
   // Build query params — always filter by current tab's moduleType
   const params = new URLSearchParams();
@@ -667,13 +683,14 @@ export default function FeedPage() {
                                 {row.score.matchedProducts && row.score.matchedProducts.length > 0 && (
                                   <div className="flex flex-wrap gap-1.5 mb-2">
                                     {row.score.matchedProducts.map((name) => (
-                                      <span
+                                      <button
                                         key={name}
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5"
+                                        onClick={() => setComparisonDialog({ matchedProductName: name, row })}
+                                        className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5 hover:bg-red-100 hover:ring-red-300 transition-colors cursor-pointer"
                                       >
                                         <Target className="h-3 w-3" />
                                         Affects: Your {name}
-                                      </span>
+                                      </button>
                                     ))}
                                   </div>
                                 )}
@@ -792,13 +809,14 @@ export default function FeedPage() {
                       {row.score.matchedProducts && row.score.matchedProducts.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-3">
                           {row.score.matchedProducts.map((name) => (
-                            <span
+                            <button
                               key={name}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5"
+                              onClick={() => setComparisonDialog({ matchedProductName: name, row })}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5 hover:bg-red-100 hover:ring-red-300 transition-colors cursor-pointer"
                             >
                               <Target className="h-3 w-3" />
                               Affects: Your {name}
-                            </span>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -859,6 +877,25 @@ export default function FeedPage() {
           </p>
         )}
       </div>
+
+      {/* Product comparison dialog */}
+      {comparisonDialog && (
+        <ProductComparisonDialog
+          open={!!comparisonDialog}
+          onOpenChange={(open) => !open && setComparisonDialog(null)}
+          matchedProductName={comparisonDialog.matchedProductName}
+          companyProduct={findCompanyProduct(comparisonDialog.matchedProductName)}
+          eventTitle={comparisonDialog.row.event.title}
+          moduleType={comparisonDialog.row.event.moduleType}
+          competitorName={comparisonDialog.row.competitor.name}
+          rawData={comparisonDialog.row.event.rawData as Record<string, unknown>}
+          summary={comparisonDialog.row.score.summary}
+          signalReasoning={comparisonDialog.row.score.signalReasoning}
+          sentimentLabel={comparisonDialog.row.score.sentimentLabel}
+          finalScore={comparisonDialog.row.score.finalScore}
+          sourceUrl={comparisonDialog.row.event.sourceUrl}
+        />
+      )}
     </div>
   );
 }

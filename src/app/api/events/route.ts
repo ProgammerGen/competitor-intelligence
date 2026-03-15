@@ -53,9 +53,9 @@ export async function GET(req: NextRequest) {
     .innerJoin(userCompanies, eq(userCompanies.id, trackedCompetitors.userCompanyId))
     .where(and(...conditions))
     .orderBy(
-      sort === "date"
-        ? desc(events.eventOccurredAt)
-        : desc(relevanceScores.finalScore)
+      ...(sort === "date"
+        ? [desc(events.eventOccurredAt), desc(relevanceScores.finalScore)]
+        : [desc(relevanceScores.finalScore), desc(events.eventOccurredAt)])
     )
     .limit(limit)
     .offset(offset);

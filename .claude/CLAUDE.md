@@ -13,7 +13,7 @@
 ## Key Files
 - `server.ts` — custom Next.js server, seeds default user, starts cron after server.listen()
 - `src/lib/db/schema.ts` — all 8 Drizzle table definitions + shared types
-- `src/lib/services/openai.ts` — all 6 LLM prompt functions with lazy `getClient()` (includes `scoreCompetitor`)
+- `src/lib/services/openai.ts` — all 7 LLM prompt functions with lazy `getClient()` (includes `scoreCompetitor`, `compareProducts`)
 - `src/lib/services/companyProducts.ts` — sync + query user's own product catalog for AI matching
 - `src/lib/scoring.ts` — `computeRecencyPenalty` + `computeFinalScore`
 - `src/lib/modules/index.ts` — module orchestrator (creates module_runs, catches errors)
@@ -23,13 +23,15 @@
 
 ## Important Decisions
 - **Single user:** hardcoded UUID `'00000000-0000-0000-0000-000000000001'` seeded on startup
-- **Idempotency:** `UNIQUE(competitor_id, module_type, external_id)` + `.onConflictDoNothing()` + `.returning()` guard
+- **Idempotency:** `UNIQUE(competitor_id, module_type, external_id)` + `.onConflictDoNothing()` + `.returning()` guard — resync does NOT clear old events; idempotency handles duplicates naturally
 - **Score recomputation:** `events.raw_data JSONB` stores full payload; `relevance_scores` is separate table
 - **Snapshot pruning:** Products module deletes snapshots older than 30 days after each sync
 - **Dynamic routes:** Root `page.tsx` and `/api/modules/status` need `export const dynamic = "force-dynamic"` to prevent static prerendering
 - **OpenAI client:** MUST be lazy (`getClient()` function, not module-level const) or Next.js build fails
 - **Product batching:** gpt-4o-mini drops fields on 60+ item inputs — products are batched in groups of 20
 - **Company product matching:** All AI scoring prompts receive the user's product catalog for competitive matching; `matchedProducts` stored in `relevance_scores`
+- **Product comparison dialog:** Clickable "Affects: Your X" pills in feed open a Radix Dialog with live AI comparison via `compareProducts()` — results are not cached, each click triggers a fresh analysis
+- **Feed sorting:** Primary sort by date or score, with secondary sort as tiebreaker (date→score or score→date)
 
 ## Database Migrations
 

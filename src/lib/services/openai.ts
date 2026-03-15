@@ -152,6 +152,89 @@ Competitor to evaluate: ${competitorName} (${competitorDomain})`,
   }
 }
 
+export interface ProductComparison {
+  headline: string;
+  competitorStrengths: string[];
+  competitorWeaknesses: string[];
+  threatLevel: "High" | "Medium" | "Low";
+  recommendation: string;
+}
+
+export async function compareProducts(opts: {
+  companyName: string;
+  companyProduct: { title: string; description?: string | null; price?: string | null; productType?: string | null };
+  competitorName: string;
+  competitorProduct?: { title: string; description?: string | null; price?: string | null } | null;
+  moduleType: string;
+  eventSummary: string;
+}): Promise<ProductComparison> {
+  const isProductLaunch = opts.moduleType === "product_launch" && opts.competitorProduct;
+
+  const systemPrompt = isProductLaunch
+    ? `You are a competitive intelligence analyst. Compare a competitor's product against the user's company product. Return JSON with exactly these keys:
+- headline: one sentence competitive verdict (e.g. "Direct threat to your mid-range line at a lower price point")
+- competitorStrengths: array of 2-3 short bullet strings describing where the competitor product is stronger
+- competitorWeaknesses: array of 2-3 short bullet strings describing where the competitor product is weaker or vulnerable
+- threatLevel: exactly "High", "Medium", or "Low"
+- recommendation: 1-2 sentences on how the company should respond strategically`
+    : `You are a competitive intelligence analyst. Analyze how a competitive event impacts a specific product in the user's company portfolio. Return JSON with exactly these keys:
+- headline: one sentence summarizing the impact on this specific product
+- competitorStrengths: array of 2-3 short bullet strings describing competitive advantages revealed by this event
+- competitorWeaknesses: array of 2-3 short bullet strings describing opportunities or gaps the company can exploit
+- threatLevel: exactly "High", "Medium", or "Low" based on how much this event threatens this specific product
+- recommendation: 1-2 sentences on how the company should respond strategically`;
+
+  const userContent = isProductLaunch
+    ? `Company: ${opts.companyName}
+Your Product: ${opts.companyProduct.title}${opts.companyProduct.price ? ` (${opts.companyProduct.price})` : ""}
+${opts.companyProduct.description ? `Description: ${opts.companyProduct.description}` : ""}
+${opts.companyProduct.productType ? `Category: ${opts.companyProduct.productType}` : ""}
+
+Competitor: ${opts.competitorName}
+Competitor Product: ${opts.competitorProduct!.title}${opts.competitorProduct!.price ? ` (${opts.competitorProduct!.price})` : ""}
+${opts.competitorProduct!.description ? `Description: ${opts.competitorProduct!.description.slice(0, 500)}` : ""}
+
+Existing AI analysis: ${opts.eventSummary}`
+    : `Company: ${opts.companyName}
+Your Product: ${opts.companyProduct.title}${opts.companyProduct.price ? ` (${opts.companyProduct.price})` : ""}
+${opts.companyProduct.description ? `Description: ${opts.companyProduct.description}` : ""}
+${opts.companyProduct.productType ? `Category: ${opts.companyProduct.productType}` : ""}
+
+Competitor: ${opts.competitorName}
+Event type: ${opts.moduleType}
+Event summary: ${opts.eventSummary}`;
+
+  try {
+    const response = await getClient().chat.completions.create({
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+    });
+
+    const raw = response.choices[0].message.content ?? "{}";
+    const parsed = JSON.parse(raw);
+    return {
+      headline: parsed.headline || "Unable to generate comparison.",
+      competitorStrengths: Array.isArray(parsed.competitorStrengths) ? parsed.competitorStrengths : [],
+      competitorWeaknesses: Array.isArray(parsed.competitorWeaknesses) ? parsed.competitorWeaknesses : [],
+      threatLevel: ["High", "Medium", "Low"].includes(parsed.threatLevel) ? parsed.threatLevel : "Medium",
+      recommendation: parsed.recommendation || "",
+    };
+  } catch (err) {
+    console.error("[compareProducts] Failed:", err);
+    return {
+      headline: "Unable to generate comparison — please try again.",
+      competitorStrengths: [],
+      competitorWeaknesses: [],
+      threatLevel: "Medium",
+      recommendation: "",
+    };
+  }
+}
+
 export async function scoreArticles(
   company: UserCompany,
   competitorName: string,
