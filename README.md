@@ -44,7 +44,7 @@ Vercel (Next.js serverless)          Railway
 └── /api/cron/daily  ← triggered by Vercel Cron at 10:00 UTC daily
 ```
 
-`server.ts` and `node-cron` remain in the repo for local reference but are not used in production. Vercel Cron calls `GET /api/cron/daily` on schedule. Manual module runs from the monitoring page use `after()` (Next.js 16) to fire-and-forget without blocking the HTTP response.
+`server.ts` and `node-cron` remain in the repo but are not used in production. To use the local cron scheduler, start the app with `npx tsx server.ts` instead of `npm run dev`. In production, Vercel Cron calls `GET /api/cron/daily` on schedule. Manual module runs from the monitoring page use `after()` (Next.js 16) to fire-and-forget without blocking the HTTP response.
 
 **Data flow:**
 
@@ -104,12 +104,12 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 
 ## Module Status
 
-| Module | Status | Notes |
-|---|---|---|
-| A — Product Launches | ⚠️ Partial | 4-strategy fetch (Shopify → WooCommerce → Sitemap → HTML scrape) + Tavily fallback; WAF-blocked sites return web mentions instead of structured product data |
-| B — News | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
-| C — Web Search | ✅ Working | Tavily Search API, past-30-day web mentions, batched LLM scoring, suppresses score < 25 |
-| D — Job Postings | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
+| Module | `module_type` | Status | Notes |
+|---|---|---|---|
+| A — Product Launches | `product_launch` | ⚠️ Partial | 4-strategy fetch (Shopify → WooCommerce → Sitemap → HTML scrape) + Tavily fallback; WAF-blocked sites return web mentions instead of structured product data |
+| B — News | `news` | ✅ Working | NewsAPI `/v2/everything`, 20 articles/competitor, single batched LLM call, suppresses score < 25 |
+| C — Web Search | `review` | ✅ Working | Tavily Search API, past-30-day web mentions, batched LLM scoring, suppresses score < 25 |
+| D — Job Postings | `job_posting` | ⚠️ Partial | Cheerio HTML scraper; JS-rendered career pages (most major brands) return empty — Puppeteer/Playwright needed |
 
 **Job postings caveat:** The cheerio scraper works on server-rendered career pages. Most modern brands use React/Next.js job boards that return empty HTML to a plain `fetch()`. In production this would use Playwright or Proxycurl. The module fails gracefully — 0 results logged, no crash, no user-visible error.
 
