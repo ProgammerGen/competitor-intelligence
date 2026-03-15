@@ -290,6 +290,35 @@ Claude Code (Anthropic) was used throughout — scaffolding, debugging, refactor
 
 ## Release Notes
 
+### v1.4.0
+
+**Product Detail Pages, Clickable Comparison Cards & Reusable EventCard Component**
+
+- **Product detail page** — New `/company/products/[id]` page showing full product info (image, title, price, type, description, source type, created date), inline editing, delete with confirmation dialog, and related competitor events that match the product.
+- **Clickable comparison dialog cards** — Both product cards in the ProductComparisonDialog are now clickable. The competitor product card opens the source URL in a new tab; the company product card navigates to the product detail page.
+- **Reusable EventCard component** — Extracted the event card rendering into a shared `EventCard` component used by both the intelligence feed and the product detail page. Handles product_launch cards (image + price + AI analysis box) and other event types (title + summary) with configurable props for matched product pills, expandable reasoning, and click handlers.
+- **Competitor signal counts on catalog** — Each product card on the catalog page now shows a badge (e.g. "3 competitor signals") indicating how many competitor events reference that product. Powered by a new `/api/company/products/event-counts` endpoint.
+- **Catalog product cards clickable** — Product cards on the `/company/products` catalog page are now clickable, navigating to the detail page.
+- **Sidebar active state fix** — Fixed a bug where both "Company Profile" and "Your Products" appeared active on product sub-pages. Uses shadow detection to correctly highlight only the most specific matching nav item.
+- **Loading skeletons for related events** — Product detail page shows skeleton loaders while fetching related events instead of briefly flashing "No events."
+
+**New files:**
+
+- `src/components/EventCard.tsx` — Reusable event card component with configurable rendering
+- `src/app/company/products/[id]/page.tsx` — Product detail page with edit/delete and related events
+- `src/app/api/company/products/[id]/route.ts` — GET/PUT/DELETE single product API
+- `src/app/api/company/products/[id]/events/route.ts` — Related competitor events API (JSONB `?` query)
+- `src/app/api/company/products/event-counts/route.ts` — Event counts per product API
+
+**Modified files:**
+
+- `src/app/feed/page.tsx` — Refactored to use EventCard component, removed ~250 lines of duplicated rendering code
+- `src/components/ProductComparisonDialog.tsx` — Added clickable product cards with `companyProductId` prop
+- `src/components/Sidebar.tsx` — Shadow detection for active state on nested routes
+- `src/app/company/products/page.tsx` — Clickable product cards + competitor signal count badges
+
+---
+
 ### v1.3.0
 
 **AI Product Comparison, UI Enhancements & Scoring Fixes**

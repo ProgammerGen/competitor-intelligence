@@ -19,7 +19,13 @@
 - `src/lib/modules/index.ts` — module orchestrator (creates module_runs, catches errors)
 - `src/jobs/scheduler.ts` — daily cron at 06:00 ET
 - `src/app/company/products/page.tsx` — product catalog management UI
+- `src/app/company/products/[id]/page.tsx` — product detail page with edit/delete and related competitor events
 - `src/app/api/company/products/route.ts` — CRUD API for company products
+- `src/app/api/company/products/[id]/route.ts` — GET/PUT/DELETE single product
+- `src/app/api/company/products/[id]/events/route.ts` — related competitor events for a product (JSONB `?` query)
+- `src/app/api/company/products/event-counts/route.ts` — event counts per product for catalog badges
+- `src/components/EventCard.tsx` — reusable event card component (used by feed page and product detail page)
+- `src/components/ProductComparisonDialog.tsx` — AI product comparison dialog with clickable product cards
 
 ## Important Decisions
 - **Single user:** hardcoded UUID `'00000000-0000-0000-0000-000000000001'` seeded on startup
@@ -30,7 +36,10 @@
 - **OpenAI client:** MUST be lazy (`getClient()` function, not module-level const) or Next.js build fails
 - **Product batching:** gpt-4o-mini drops fields on 60+ item inputs — products are batched in groups of 20
 - **Company product matching:** All AI scoring prompts receive the user's product catalog for competitive matching; `matchedProducts` stored in `relevance_scores`
-- **Product comparison dialog:** Clickable "Affects: Your X" pills in feed open a Radix Dialog with live AI comparison via `compareProducts()` — results are not cached, each click triggers a fresh analysis
+- **Product comparison dialog:** Clickable "Affects: Your X" pills in feed open a Radix Dialog with live AI comparison via `compareProducts()` — results are not cached, each click triggers a fresh analysis. Both product cards in the dialog are clickable: competitor card opens source URL in new tab, company card navigates to product detail page
+- **Product detail page:** `/company/products/[id]` shows full product info, inline edit form (title, description, price, type, image URL), delete with confirmation dialog, and related competitor events. Clicking an event card opens the comparison dialog
+- **EventCard component:** Shared component for rendering event cards consistently across feed and product detail pages. Handles product_launch (image+price+AI analysis) and other types (title+summary). Configurable via props for matched product pills, expandable reasoning, click handlers
+- **Sidebar active state:** Uses shadow detection algorithm so `/company/products/[id]` highlights "Your Products" without also highlighting "Company Profile"
 - **Feed sorting:** Primary sort by date or score, with secondary sort as tiebreaker (date→score or score→date)
 
 ## Database Migrations

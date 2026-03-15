@@ -102,7 +102,13 @@ export function Sidebar() {
         </p>
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href;
+            // Exact match, or nested route match — but only if no other nav item is a closer prefix
+            const isExact = pathname === item.href;
+            const isNested = !isExact && (pathname?.startsWith(item.href + "/") ?? false);
+            const isShadowed = isNested && NAV_ITEMS.some(
+              (other) => other.href !== item.href && other.href.startsWith(item.href + "/") && pathname?.startsWith(other.href)
+            );
+            const isActive = isExact || (isNested && !isShadowed);
             return (
               <li key={item.href}>
                 <Link

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ export interface ProductComparisonDialogProps {
   sentimentLabel: string;
   finalScore: number;
   sourceUrl: string;
+  companyProductId?: string | null;
 }
 
 function stripHtml(html: string): string {
@@ -105,7 +107,9 @@ export function ProductComparisonDialog({
   sentimentLabel,
   finalScore,
   sourceUrl,
+  companyProductId,
 }: ProductComparisonDialogProps) {
+  const router = useRouter();
   const [comparison, setComparison] = useState<ProductComparison | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -170,10 +174,18 @@ export function ProductComparisonDialog({
         {isProductLaunch ? (
           <div className="grid grid-cols-2 gap-4 mt-4">
             {/* Competitor product */}
-            <div className="rounded-lg border border-border p-4 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {competitorName}
-              </p>
+            <div
+              className="rounded-lg border border-border p-4 space-y-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all group"
+              onClick={() => sourceUrl && window.open(sourceUrl, "_blank")}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {competitorName}
+                </p>
+                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+              </div>
               {competitorImage ? (
                 <div className="w-full h-32 rounded-lg overflow-hidden bg-muted border border-border/60">
                   <img
@@ -204,10 +216,27 @@ export function ProductComparisonDialog({
             </div>
 
             {/* Company product */}
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-                Your Product
-              </p>
+            <div
+              className={`rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3 ${
+                companyProductId ? "cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all group" : ""
+              }`}
+              onClick={() => {
+                if (companyProductId) {
+                  onOpenChange(false);
+                  router.push(`/company/products/${companyProductId}`);
+                }
+              }}
+              role={companyProductId ? "button" : undefined}
+              tabIndex={companyProductId ? 0 : undefined}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+                  Your Product
+                </p>
+                {companyProductId && (
+                  <ArrowUpRight className="h-3.5 w-3.5 text-primary/40 group-hover:text-primary transition-colors" />
+                )}
+              </div>
               {companyProduct?.imageUrl ? (
                 <div className="w-full h-32 rounded-lg overflow-hidden bg-muted border border-border/60">
                   <img
@@ -256,10 +285,27 @@ export function ProductComparisonDialog({
               </p>
             </div>
 
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
-                Your Product
-              </p>
+            <div
+              className={`rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3 ${
+                companyProductId ? "cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all group" : ""
+              }`}
+              onClick={() => {
+                if (companyProductId) {
+                  onOpenChange(false);
+                  router.push(`/company/products/${companyProductId}`);
+                }
+              }}
+              role={companyProductId ? "button" : undefined}
+              tabIndex={companyProductId ? 0 : undefined}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+                  Your Product
+                </p>
+                {companyProductId && (
+                  <ArrowUpRight className="h-3.5 w-3.5 text-primary/40 group-hover:text-primary transition-colors" />
+                )}
+              </div>
               <div className="flex items-start gap-3">
                 {companyProduct?.imageUrl ? (
                   <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted border border-border/60 flex-shrink-0">

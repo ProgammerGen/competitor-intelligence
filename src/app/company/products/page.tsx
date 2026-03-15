@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   Package,
   Tag,
+  Activity,
 } from "lucide-react";
 
 interface CompanyProduct {
@@ -29,6 +31,7 @@ interface CompanyProduct {
 }
 
 export default function CompanyProductsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -38,6 +41,12 @@ export default function CompanyProductsPage() {
   const { data: products, isLoading } = useQuery<CompanyProduct[]>({
     queryKey: ["companyProducts"],
     queryFn: () => fetch("/api/company/products").then((r) => r.json()),
+  });
+
+  const { data: eventCounts } = useQuery<Record<string, number>>({
+    queryKey: ["companyProductEventCounts"],
+    queryFn: () => fetch("/api/company/products/event-counts").then((r) => r.json()),
+    enabled: !!products && products.length > 0,
   });
 
   const addProduct = useMutation({
@@ -160,7 +169,11 @@ export default function CompanyProductsPage() {
             </h2>
             <div className="space-y-2">
               {autoProducts.map((p) => (
-                <div key={p.id} className="card-elevated p-4">
+                <div
+                  key={p.id}
+                  className="card-elevated p-4 cursor-pointer hover:border-primary/30 hover:shadow-sm transition-all"
+                  onClick={() => router.push(`/company/products/${p.id}`)}
+                >
                   <div className="flex items-start gap-4">
                     {p.imageUrl ? (
                       <img
@@ -187,10 +200,16 @@ export default function CompanyProductsPage() {
                                 {p.productType}
                               </span>
                             )}
+                            {eventCounts && eventCounts[p.id] > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2 py-0.5 font-medium">
+                                <Activity className="h-2.5 w-2.5" />
+                                {eventCounts[p.id]} competitor signal{eventCounts[p.id] !== 1 ? "s" : ""}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <button
-                          onClick={() => deleteProduct.mutate(p.id)}
+                          onClick={(e) => { e.stopPropagation(); deleteProduct.mutate(p.id); }}
                           className="text-muted-foreground hover:text-destructive transition-colors p-1"
                           title="Remove product"
                         >
@@ -218,7 +237,11 @@ export default function CompanyProductsPage() {
             </h2>
             <div className="space-y-2">
               {manualProducts.map((p) => (
-                <div key={p.id} className="card-elevated p-4">
+                <div
+                  key={p.id}
+                  className="card-elevated p-4 cursor-pointer hover:border-primary/30 hover:shadow-sm transition-all"
+                  onClick={() => router.push(`/company/products/${p.id}`)}
+                >
                   <div className="flex items-start gap-4">
                     <div className="w-14 h-14 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
                       <ShoppingBag className="h-5 w-5 text-purple-500" />
@@ -227,12 +250,20 @@ export default function CompanyProductsPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <h3 className="font-semibold text-sm leading-tight">{p.title}</h3>
-                          {p.price && (
-                            <span className="text-xs text-muted-foreground font-medium">{p.price}</span>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {p.price && (
+                              <span className="text-xs text-muted-foreground font-medium">{p.price}</span>
+                            )}
+                            {eventCounts && eventCounts[p.id] > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2 py-0.5 font-medium">
+                                <Activity className="h-2.5 w-2.5" />
+                                {eventCounts[p.id]} competitor signal{eventCounts[p.id] !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <button
-                          onClick={() => deleteProduct.mutate(p.id)}
+                          onClick={(e) => { e.stopPropagation(); deleteProduct.mutate(p.id); }}
                           className="text-muted-foreground hover:text-destructive transition-colors p-1"
                           title="Remove product"
                         >

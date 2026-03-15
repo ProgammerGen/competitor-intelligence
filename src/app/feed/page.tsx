@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ProductComparisonDialog } from "@/components/ProductComparisonDialog";
+import { EventCard } from "@/components/EventCard";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,6 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import {
-  ExternalLink,
   Search,
   SlidersHorizontal,
   TrendingUp,
@@ -27,12 +27,6 @@ import {
   Briefcase,
   ArrowUpRight,
   Calendar,
-  DollarSign,
-  Lightbulb,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Target,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -111,78 +105,6 @@ const TABS: { key: TabKey; label: string; icon: typeof ShoppingBag; desc: string
   },
 ];
 
-const MODULE_COLORS: Record<string, string> = {
-  news: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
-  product_launch: "bg-purple-50 text-purple-700 ring-1 ring-purple-200",
-  review: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  job_posting: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-};
-
-const MODULE_BAR_COLORS: Record<string, string> = {
-  news: "bg-blue-500",
-  product_launch: "bg-purple-500",
-  review: "bg-amber-500",
-  job_posting: "bg-emerald-500",
-};
-
-const SENTIMENT_CONFIG: Record<string, { class: string; dot: string }> = {
-  Positive: { class: "text-emerald-700", dot: "bg-emerald-500" },
-  Neutral: { class: "text-slate-500", dot: "bg-slate-400" },
-  Negative: { class: "text-red-600", dot: "bg-red-500" },
-};
-
-function scoreColor(score: number) {
-  if (score >= 80) return "bg-red-500 text-white";
-  if (score >= 60) return "bg-amber-500 text-white";
-  if (score >= 40) return "bg-yellow-400 text-yellow-900";
-  return "bg-slate-200 text-slate-600";
-}
-
-function scoreLabel(score: number) {
-  if (score >= 80) return "Critical";
-  if (score >= 60) return "Important";
-  if (score >= 40) return "Notable";
-  return "Low";
-}
-
-function highlightCompanyName(text: string, name: string): React.ReactNode {
-  if (!name || !text.includes(name)) return text;
-  const parts = text.split(name);
-  return parts.reduce<React.ReactNode[]>((acc, part, i) => {
-    if (i > 0) acc.push(<strong key={i} className="text-foreground font-semibold">{name}</strong>);
-    acc.push(part);
-    return acc;
-  }, []);
-}
-
-function timeAgo(date: string) {
-  const diff = (Date.now() - new Date(date).getTime()) / 1000;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(date).toLocaleDateString();
-}
-
-function formatDate(date: string) {
-  return new Date(date).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatPrice(variants?: Array<{ price: string; title: string }>) {
-  if (!variants || variants.length === 0) return null;
-  const prices = variants
-    .map((v) => parseFloat(v.price))
-    .filter((p) => !isNaN(p) && p > 0);
-  if (prices.length === 0) return null;
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  if (min === max) return `$${min.toFixed(2)}`;
-  return `$${min.toFixed(2)} – $${max.toFixed(2)}`;
-}
-
 function monthLabel(date: string) {
   return new Date(date).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
@@ -218,7 +140,7 @@ export default function FeedPage() {
   const companyName = company?.name ?? "";
 
   const { data: companyProducts } = useQuery<
-    Array<{ title: string; description?: string | null; price?: string | null; imageUrl?: string | null; productType?: string | null }>
+    Array<{ id: string; title: string; description?: string | null; price?: string | null; imageUrl?: string | null; productType?: string | null }>
   >({
     queryKey: ["companyProducts"],
     queryFn: () => fetch("/api/company/products").then((r) => r.json()),
@@ -581,178 +503,19 @@ export default function FeedPage() {
 
                 {/* Product cards */}
                 <div className="space-y-3">
-                  {events.map((row, idx) => {
-                    const raw = row.event.rawData;
-                    const imageUrl = raw?.images?.[0]?.src;
-                    const price = formatPrice(raw?.variants);
-                    const variantCount = raw?.variants?.length ?? 0;
-                    const isExpanded = expandedCards.has(row.event.id);
-
-                    return (
-                      <div
-                        key={row.event.id}
-                        className={`card-elevated overflow-hidden animate-fade-in ${
-                          idx < 5 ? `animate-fade-in-delay-${idx}` : ""
-                        }`}
-                      >
-                        <div className="flex">
-                          {/* Purple left bar */}
-                          <div className="module-indicator bg-purple-500" />
-
-                          <div className="flex-1 p-5 min-w-0">
-                            <div className="flex gap-4">
-                              {/* Product image */}
-                              <div className="flex-shrink-0">
-                                {imageUrl ? (
-                                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-muted border border-border/60">
-                                    <img
-                                      src={imageUrl}
-                                      alt={row.event.title}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = "none";
-                                        (e.target as HTMLImageElement).parentElement!.classList.add(
-                                          "flex",
-                                          "items-center",
-                                          "justify-center"
-                                        );
-                                        const icon = document.createElement("div");
-                                        icon.innerHTML = "📦";
-                                        icon.className = "text-2xl";
-                                        (e.target as HTMLImageElement).parentElement!.appendChild(icon);
-                                      }}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="w-20 h-20 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center">
-                                    <ShoppingBag className="h-6 w-6 text-purple-300" />
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                {/* Competitor + date */}
-                                <div className="flex flex-wrap items-center gap-2 mb-1">
-                                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                    {row.competitor.name}
-                                  </span>
-                                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {formatDate(row.event.eventOccurredAt)}
-                                  </span>
-                                </div>
-
-                                {/* Product name */}
-                                <h3 className="font-semibold text-base leading-snug mb-1">
-                                  {row.event.title}
-                                </h3>
-
-                                {/* Price + variants */}
-                                <div className="flex flex-wrap items-center gap-3 mb-2">
-                                  {price && (
-                                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
-                                      <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-                                      {price}
-                                    </span>
-                                  )}
-                                  {variantCount > 1 && (
-                                    <span className="text-xs text-muted-foreground">
-                                      {variantCount} variant{variantCount !== 1 ? "s" : ""}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* AI Summary — what the product does & relevance */}
-                                <div className="bg-muted/40 rounded-lg p-3 mb-2">
-                                  <div className="flex items-start gap-2">
-                                    <Lightbulb className="h-3.5 w-3.5 text-primary mt-0.5 flex-shrink-0" />
-                                    <div>
-                                      <p className="text-xs font-semibold text-muted-foreground mb-0.5">
-                                        AI Analysis — How this affects your business
-                                      </p>
-                                      <p className="text-sm text-foreground leading-relaxed">
-                                        {companyName
-                                          ? highlightCompanyName(row.score.summary, companyName)
-                                          : row.score.summary}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Matched company products */}
-                                {row.score.matchedProducts && row.score.matchedProducts.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 mb-2">
-                                    {row.score.matchedProducts.map((name) => (
-                                      <button
-                                        key={name}
-                                        onClick={() => setComparisonDialog({ matchedProductName: name, row })}
-                                        className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5 hover:bg-red-100 hover:ring-red-300 transition-colors cursor-pointer"
-                                      >
-                                        <Target className="h-3 w-3" />
-                                        Affects: Your {name}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Expandable signal reasoning */}
-                                {row.score.signalReasoning && (
-                                  <button
-                                    onClick={() => toggleExpand(row.event.id)}
-                                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors mb-2"
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronUp className="h-3 w-3" />
-                                    ) : (
-                                      <ChevronDown className="h-3 w-3" />
-                                    )}
-                                    {isExpanded ? "Hide detailed reasoning" : "Show why this was flagged"}
-                                  </button>
-                                )}
-                                {isExpanded && row.score.signalReasoning && (
-                                  <div className="bg-blue-50/50 rounded-lg p-3 mb-2 animate-fade-in border border-blue-100">
-                                    <p className="text-xs font-semibold text-blue-700 mb-1">Signal Reasoning</p>
-                                    <p className="text-xs text-blue-900/70 leading-relaxed">
-                                      {row.score.signalReasoning}
-                                    </p>
-                                  </div>
-                                )}
-
-                                {/* Footer */}
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                  <span className={`flex items-center gap-1 font-medium ${SENTIMENT_CONFIG[row.score.sentimentLabel]?.class ?? ""}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${SENTIMENT_CONFIG[row.score.sentimentLabel]?.dot ?? ""}`} />
-                                    {row.score.sentimentLabel}
-                                  </span>
-                                  <span>Signal: {row.score.signalStrength}/100</span>
-                                  {row.event.sourceUrl && (
-                                    <a
-                                      href={row.event.sourceUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1 hover:text-foreground transition-colors"
-                                    >
-                                      View product <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Score */}
-                              <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                                <div className={`score-pill ${scoreColor(row.score.finalScore)}`}>
-                                  {row.score.finalScore}
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-medium">
-                                  {scoreLabel(row.score.finalScore)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {events.map((row, idx) => (
+                    <EventCard
+                      key={row.event.id}
+                      row={row}
+                      companyName={companyName}
+                      showMatchedProducts
+                      onMatchedProductClick={(name) => setComparisonDialog({ matchedProductName: name, row })}
+                      showExpandableReasoning
+                      isExpanded={expandedCards.has(row.event.id)}
+                      onToggleExpand={() => toggleExpand(row.event.id)}
+                      className={`animate-fade-in ${idx < 5 ? `animate-fade-in-delay-${idx}` : ""}`}
+                    />
+                  ))}
                 </div>
               </div>
             ))}
@@ -764,93 +527,16 @@ export default function FeedPage() {
         {/* ============================================================ */}
         {activeTab !== "product_launch" && !isLoading && (
           <div className="space-y-3">
-            {otherEvents.map((row, idx) => {
-              const sentiment = SENTIMENT_CONFIG[row.score.sentimentLabel] ?? SENTIMENT_CONFIG.Neutral;
-              const TabIcon = TABS.find((t) => t.key === row.event.moduleType)?.icon ?? Globe;
-              return (
-                <div
-                  key={row.event.id}
-                  className={`card-elevated overflow-hidden animate-fade-in ${
-                    idx < 5 ? `animate-fade-in-delay-${idx}` : ""
-                  }`}
-                >
-                  <div className="flex">
-                    <div className={`module-indicator ${MODULE_BAR_COLORS[row.event.moduleType]}`} />
-
-                    <div className="flex-1 p-4 pl-4 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {row.competitor.name}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                            MODULE_COLORS[row.event.moduleType]
-                          }`}
-                        >
-                          <TabIcon className="h-3 w-3" />
-                          {TABS.find((t) => t.key === row.event.moduleType)?.label}
-                        </span>
-                        <span
-                          className={`flex items-center gap-1 text-[11px] font-medium ${sentiment.class}`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${sentiment.dot}`} />
-                          {row.score.sentimentLabel}
-                        </span>
-                      </div>
-
-                      <h3 className="font-semibold text-[15px] leading-snug mb-1.5">{row.event.title}</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed mb-2">
-                        {companyName
-                          ? highlightCompanyName(row.score.summary, companyName)
-                          : row.score.summary}
-                      </p>
-
-                      {/* Matched company products */}
-                      {row.score.matchedProducts && row.score.matchedProducts.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {row.score.matchedProducts.map((name) => (
-                            <button
-                              key={name}
-                              onClick={() => setComparisonDialog({ matchedProductName: name, row })}
-                              className="inline-flex items-center gap-1 text-[11px] font-medium bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full px-2.5 py-0.5 hover:bg-red-100 hover:ring-red-300 transition-colors cursor-pointer"
-                            >
-                              <Target className="h-3 w-3" />
-                              Affects: Your {name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span title={new Date(row.event.eventOccurredAt).toLocaleString()}>
-                          {timeAgo(row.event.eventOccurredAt)}
-                        </span>
-                        <span>Signal: {row.score.signalStrength}/100</span>
-                        {row.event.sourceUrl && (
-                          <a
-                            href={row.event.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 hover:text-foreground transition-colors"
-                          >
-                            View source <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-center gap-1 p-4 pl-0">
-                      <div className={`score-pill ${scoreColor(row.score.finalScore)}`}>
-                        {row.score.finalScore}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-medium">
-                        {scoreLabel(row.score.finalScore)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {otherEvents.map((row, idx) => (
+              <EventCard
+                key={row.event.id}
+                row={row}
+                companyName={companyName}
+                showMatchedProducts
+                onMatchedProductClick={(name) => setComparisonDialog({ matchedProductName: name, row })}
+                className={`animate-fade-in ${idx < 5 ? `animate-fade-in-delay-${idx}` : ""}`}
+              />
+            ))}
           </div>
         )}
 
@@ -894,6 +580,7 @@ export default function FeedPage() {
           sentimentLabel={comparisonDialog.row.score.sentimentLabel}
           finalScore={comparisonDialog.row.score.finalScore}
           sourceUrl={comparisonDialog.row.event.sourceUrl}
+          companyProductId={findCompanyProduct(comparisonDialog.matchedProductName)?.id ?? null}
         />
       )}
     </div>
