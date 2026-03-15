@@ -16,25 +16,25 @@ const NAV_ITEMS = [
   {
     href: "/feed",
     label: "Intelligence Feed",
-    description: "AI-scored competitive signals",
+    description: "News, launches, mentions & jobs",
     icon: Rss,
   },
   {
     href: "/monitoring",
     label: "Monitoring",
-    description: "Module status & controls",
+    description: "Run modules & track sync status",
     icon: Activity,
   },
   {
     href: "/company",
     label: "Company Profile",
-    description: "Your AI-analyzed profile",
+    description: "Edit your company details",
     icon: Building2,
   },
   {
     href: "/company/products",
     label: "Your Products",
-    description: "Catalog for matching",
+    description: "Manage your product catalog",
     icon: ShoppingBag,
   },
 ];
@@ -97,26 +97,37 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4">
-        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30">
+        <p className="px-3 mb-3 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/30">
           Navigation
         </p>
-        <ul className="space-y-0.5">
+        <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className={`flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors ${
+                  className={`group relative flex items-start gap-3 rounded-lg px-3 py-2.5 transition-all duration-150 ${
                     isActive
                       ? "bg-sidebar-muted text-white"
                       : "text-sidebar-foreground/70 hover:bg-sidebar-muted/60 hover:text-white"
                   }`}
                 >
-                  <item.icon className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <div>
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-sidebar-accent" />
+                  )}
+                  <div className={`flex h-7 w-7 items-center justify-center rounded-md flex-shrink-0 transition-colors ${
+                    isActive
+                      ? "bg-sidebar-accent/20 text-sidebar-accent"
+                      : "bg-sidebar-muted/40 text-sidebar-foreground/50 group-hover:bg-sidebar-muted/80 group-hover:text-sidebar-foreground/70"
+                  }`}>
+                    <item.icon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium block leading-tight">{item.label}</span>
-                    <span className="text-[11px] text-sidebar-foreground/40 leading-tight">{item.description}</span>
+                    <span className={`text-[11px] leading-tight block ${
+                      isActive ? "text-sidebar-foreground/50" : "text-sidebar-foreground/35"
+                    }`}>{item.description}</span>
                   </div>
                 </Link>
               </li>

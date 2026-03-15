@@ -107,6 +107,51 @@ Why Customers Buy: ${company.whyCustomersBuy}`,
   return parsed.results ?? [];
 }
 
+export interface CompetitorScore {
+  similarityScore: number;
+  whySimilar: string;
+}
+
+export async function scoreCompetitor(
+  company: CompanyProfile,
+  competitorName: string,
+  competitorDomain: string
+): Promise<CompetitorScore> {
+  try {
+    const response = await getClient().chat.completions.create({
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            'You are a market research analyst. Given a company profile and a specific competitor, evaluate how similar the competitor is to the company. Return JSON with exactly two keys: similarityScore (integer 0-100, where 100 means identical market/product/audience and 0 means completely unrelated), whySimilar (one sentence explaining the competitive overlap). Base your assessment on industry overlap, target customer similarity, product/service comparison, and geographic overlap. Only use real publicly available knowledge about the competitor.',
+        },
+        {
+          role: "user",
+          content: `Company: ${company.name}
+Industry: ${company.industry}
+Description: ${company.description}
+Target Customer: Age ${company.targetCustomer.ageRange}, ${company.targetCustomer.geography}
+Why Customers Buy: ${company.whyCustomersBuy}
+
+Competitor to evaluate: ${competitorName} (${competitorDomain})`,
+        },
+      ],
+    });
+
+    const raw = response.choices[0].message.content ?? "{}";
+    const parsed = JSON.parse(raw) as CompetitorScore;
+    return {
+      similarityScore: typeof parsed.similarityScore === "number" ? parsed.similarityScore : 50,
+      whySimilar: parsed.whySimilar || "Unable to determine similarity.",
+    };
+  } catch (err) {
+    console.error("[scoreCompetitor] Failed:", err);
+    return { similarityScore: 50, whySimilar: "Unable to determine similarity — please verify manually." };
+  }
+}
+
 export async function scoreArticles(
   company: UserCompany,
   competitorName: string,

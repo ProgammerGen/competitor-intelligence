@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,9 @@ import {
   Search,
   Shield,
   Check,
+  Loader2,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const DISCOVERY_STEPS = [
   { text: "Reading your company profile...", delay: 0 },
@@ -114,6 +116,8 @@ export default function CompetitorsSetupPage() {
   const [error, setError] = useState("");
   const [customName, setCustomName] = useState("");
   const [customDomain, setCustomDomain] = useState("");
+  const [scoringDomain, setScoringDomain] = useState<string | null>(null);
+  const competitorRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     fetch("/api/competitors", { method: "POST" })
@@ -160,21 +164,50 @@ export default function CompetitorsSetupPage() {
     },
   });
 
-  const addCustom = () => {
+  const addCustom = async () => {
     const d = customDomain.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-    if (!d || !customName.trim()) return;
+    const n = customName.trim();
+    if (!d || !n) return;
+
+    // Insert immediately with loading sentinel
     setCompetitors((prev) => [
       ...prev,
-      {
-        name: customName.trim(),
-        domain: d,
-        similarityScore: 70,
-        whySimilar: "Manually added",
-        selected: true,
-      },
+      { name: n, domain: d, similarityScore: -1, whySimilar: "", selected: true },
     ]);
+    setScoringDomain(d);
     setCustomName("");
     setCustomDomain("");
+
+    try {
+      const res = await fetch("/api/competitors/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n, domain: d }),
+      });
+      const score = await res.json();
+
+      setCompetitors((prev) => {
+        const updated = prev.map((c) =>
+          c.domain === d
+            ? { ...c, similarityScore: score.similarityScore, whySimilar: score.whySimilar }
+            : c
+        );
+        return updated.sort((a, b) => b.similarityScore - a.similarityScore);
+      });
+    } catch {
+      setCompetitors((prev) =>
+        prev.map((c) =>
+          c.domain === d
+            ? { ...c, similarityScore: 50, whySimilar: "Could not analyze — added manually." }
+            : c
+        )
+      );
+    } finally {
+      setScoringDomain(null);
+      setTimeout(() => {
+        competitorRefs.current.get(d)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
+    }
   };
 
   const selected = competitors.filter((c) => c.selected);
@@ -274,6 +307,7 @@ export default function CompetitorsSetupPage() {
             {competitors.map((c, i) => (
               <div
                 key={c.domain}
+                ref={(el) => { if (el) competitorRefs.current.set(c.domain, el); }}
                 className={`card-elevated p-4 flex gap-4 items-start transition-all duration-200 animate-fade-in ${
                   c.selected ? "" : "opacity-40 scale-[0.99]"
                 } ${i < 5 ? `animate-fade-in-delay-${i}` : ""}`}
@@ -299,14 +333,28 @@ export default function CompetitorsSetupPage() {
                       <span className="font-semibold text-sm block leading-tight">{c.name}</span>
                       <span className="text-[11px] text-muted-foreground">{c.domain}</span>
                     </div>
-                    <Badge className={`text-[11px] border ${matchColor(c.similarityScore)}`} variant="outline">
-                      {c.similarityScore}% &middot; {matchLabel(c.similarityScore)}
-                    </Badge>
+                    {c.similarityScore === -1 ? (
+                      <Badge className="text-[11px] border bg-muted animate-pulse" variant="outline">
+                        <Sparkles className="h-3 w-3 mr-1 animate-spin" />
+                        Analyzing...
+                      </Badge>
+                    ) : (
+                      <Badge className={`text-[11px] border ${matchColor(c.similarityScore)}`} variant="outline">
+                        {c.similarityScore}% &middot; {matchLabel(c.similarityScore)}
+                      </Badge>
+                    )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    <span className="text-xs font-medium text-foreground">Why similar: </span>
-                    {c.whySimilar}
-                  </p>
+                  {c.similarityScore === -1 ? (
+                    <div className="mt-2 space-y-1.5">
+                      <Skeleton className="h-3 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                      <span className="text-xs font-medium text-foreground">Why similar: </span>
+                      {c.whySimilar}
+                    </p>
+                  )}
                 </div>
                 <button
                   onClick={() =>
@@ -340,8 +388,12 @@ export default function CompetitorsSetupPage() {
                   onChange={(e) => setCustomDomain(e.target.value)}
                   className="flex-1 min-w-36"
                 />
-                <Button variant="outline" size="icon" onClick={addCustom} title="Add competitor">
-                  <Plus className="h-4 w-4" />
+                <Button variant="outline" size="icon" onClick={addCustom} disabled={!!scoringDomain} title="Add competitor">
+                  {scoringDomain ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             </div>

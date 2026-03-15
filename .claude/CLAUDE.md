@@ -13,7 +13,7 @@
 ## Key Files
 - `server.ts` — custom Next.js server, seeds default user, starts cron after server.listen()
 - `src/lib/db/schema.ts` — all 8 Drizzle table definitions + shared types
-- `src/lib/services/openai.ts` — all 5 LLM prompt functions with lazy `getClient()`
+- `src/lib/services/openai.ts` — all 6 LLM prompt functions with lazy `getClient()` (includes `scoreCompetitor`)
 - `src/lib/services/companyProducts.ts` — sync + query user's own product catalog for AI matching
 - `src/lib/scoring.ts` — `computeRecencyPenalty` + `computeFinalScore`
 - `src/lib/modules/index.ts` — module orchestrator (creates module_runs, catches errors)

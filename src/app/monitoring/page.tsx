@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -25,6 +25,7 @@ import {
   Clock,
   AlertTriangle,
   Zap,
+  Sparkles,
 } from "lucide-react";
 
 type ModuleStatus = {
@@ -141,6 +142,8 @@ export default function MonitoringPage() {
   const [addName, setAddName] = useState("");
   const [addDomain, setAddDomain] = useState("");
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const competitorRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const { data, isLoading } = useQuery<StatusRow[]>({
     queryKey: ["module-status"],
@@ -177,10 +180,28 @@ export default function MonitoringPage() {
 
   const addMutation = useMutation({
     mutationFn: async ({ name, domain }: { name: string; domain: string }) => {
+      // Get AI similarity score
+      let similarityScore = 50;
+      let whySimilar = "Manually added";
+      try {
+        const scoreRes = await fetch("/api/competitors/score", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, domain }),
+        });
+        if (scoreRes.ok) {
+          const score = await scoreRes.json();
+          similarityScore = score.similarityScore;
+          whySimilar = score.whySimilar;
+        }
+      } catch {
+        // Fallback to defaults above
+      }
+
       const res = await fetch("/api/competitors", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ name, domain, similarityScore: 70, whySimilar: "Manually added" }]),
+        body: JSON.stringify([{ name, domain, similarityScore, whySimilar }]),
       });
       if (!res.ok) throw new Error("Failed to add");
       return res.json() as Promise<Array<{ id: string }>>;
@@ -191,6 +212,7 @@ export default function MonitoringPage() {
       setShowAdd(false);
       queryClient.invalidateQueries({ queryKey: ["module-status"] });
       if (inserted[0]?.id) {
+        setLastAddedId(inserted[0].id);
         await Promise.all(
           Object.keys(MODULE_META).map((moduleType) =>
             fetch("/api/modules/trigger", {
@@ -204,6 +226,19 @@ export default function MonitoringPage() {
       }
     },
   });
+
+  // Auto-scroll to newly added competitor
+  useEffect(() => {
+    if (lastAddedId && data?.some((row) => row.competitor.id === lastAddedId)) {
+      setTimeout(() => {
+        competitorRefs.current.get(lastAddedId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+        setLastAddedId(null);
+      }, 200);
+    }
+  }, [data, lastAddedId]);
 
   const changeCompanyMutation = useMutation({
     mutationFn: () => fetch("/api/company", { method: "DELETE" }),
@@ -239,31 +274,33 @@ export default function MonitoringPage() {
     <div className="ml-[240px]">
       <div className="max-w-5xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div className="page-header mb-0">
-            <h1>Monitoring Dashboard</h1>
-            <p className="max-w-xl">
-              Track the status of all intelligence modules across your competitors. Each module runs automatically
-              every day, or you can trigger a manual sync anytime.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-            <Link href="/feed">
-              <Button variant="outline" size="sm">
-                View feed
-                <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
+        <div className="page-header">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1>Monitoring Dashboard</h1>
+              <p className="max-w-xl">
+                Track the status of all intelligence modules across your competitors. Each module runs automatically
+                every day, or you can trigger a manual sync anytime.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+              <Link href="/feed">
+                <Button variant="outline" size="sm">
+                  View feed
+                  <ArrowUpRight className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive text-xs"
+                onClick={() => changeCompanyMutation.mutate()}
+                disabled={changeCompanyMutation.isPending}
+              >
+                <RotateCw className="h-3 w-3 mr-1.5" />
+                {changeCompanyMutation.isPending ? "Resetting..." : "Reset company"}
               </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-destructive text-xs"
-              onClick={() => changeCompanyMutation.mutate()}
-              disabled={changeCompanyMutation.isPending}
-            >
-              <RotateCw className="h-3 w-3 mr-1.5" />
-              {changeCompanyMutation.isPending ? "Resetting..." : "Reset company"}
-            </Button>
+            </div>
           </div>
         </div>
 
@@ -349,6 +386,7 @@ export default function MonitoringPage() {
           {data?.map((row, idx) => (
             <div
               key={row.competitor.id}
+              ref={(el) => { if (el) competitorRefs.current.set(row.competitor.id, el); }}
               className={`card-elevated p-5 animate-fade-in ${
                 idx < 5 ? `animate-fade-in-delay-${idx}` : ""
               }`}
@@ -534,6 +572,12 @@ export default function MonitoringPage() {
                   Cancel
                 </Button>
               </div>
+              {addMutation.isPending && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground animate-fade-in">
+                  <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                  <span>AI is analyzing competitor similarity...</span>
+                </div>
+              )}
               {addMutation.isError && (
                 <p className="text-destructive text-xs mt-2">Failed to add competitor. Please check the details and try again.</p>
               )}

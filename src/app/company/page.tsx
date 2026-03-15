@@ -84,23 +84,25 @@ export default function CompanyPage() {
     <div className="ml-[240px]">
       <div className="max-w-3xl mx-auto px-6 py-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div className="page-header mb-0">
-            <h1>Company Profile</h1>
-            <p>
-              This is the AI-generated profile of your company. All competitive signals are scored
-              and ranked based on this information — the more accurate it is, the better your results.
-            </p>
+        <div className="page-header">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1>Company Profile</h1>
+              <p>
+                This is the AI-generated profile of your company. All competitive signals are scored
+                and ranked based on this information — the more accurate it is, the better your results.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-shrink-0 ml-4"
+              onClick={() => router.push("/setup/company")}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />
+              Edit profile
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-shrink-0 ml-4"
-            onClick={() => router.push("/setup/company")}
-          >
-            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-            Edit profile
-          </Button>
         </div>
 
         {/* How this profile is used */}

@@ -49,15 +49,15 @@
   }
 
   .page-header {
-    @apply mb-8;
+    @apply mb-8 rounded-xl bg-gradient-to-br from-card to-muted/40 border border-border/60 px-6 py-6 shadow-sm;
   }
 
   .page-header h1 {
-    @apply text-3xl font-bold tracking-tight text-foreground;
+    @apply text-2xl font-bold tracking-tight text-foreground;
   }
 
   .page-header p {
-    @apply text-muted-foreground mt-1.5;
+    @apply text-sm text-muted-foreground mt-1.5 leading-relaxed;
   }
 
   .filter-bar {
