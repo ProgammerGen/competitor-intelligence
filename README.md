@@ -34,7 +34,7 @@ npm run dev       # starts at http://localhost:3000
 
 ## Architecture Overview
 
-**Stack:** Next.js 14 (App Router) · TypeScript · Drizzle ORM · PostgreSQL · gpt-4o-mini · Tailwind CSS v3 · Railway
+**Stack:** Next.js 16 (App Router) · TypeScript · React 19 · Drizzle ORM · PostgreSQL · gpt-4o-mini · Tailwind CSS v3 · Vercel + Railway
 
 **Deployment:**
 

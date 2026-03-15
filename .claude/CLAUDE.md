@@ -1,13 +1,14 @@
 # Competitor Intelligence App — Project Notes
 
 ## Stack
-- **Framework:** Next.js 14 (App Router), TypeScript
+
+- **Framework:** Next.js 16 (App Router), TypeScript, React 19
 - **ORM:** Drizzle ORM with pg driver
 - **DB:** PostgreSQL (Railway addon in prod, local Postgres in dev)
 - **LLM:** OpenAI gpt-4o-mini (lazy-initialized client via `getClient()` in `src/lib/services/openai.ts`)
-- **Scheduler:** node-cron in `server.ts` custom server (NOT Vercel — needs persistent process)
+- **Scheduler:** Vercel Cron (`vercel.json` → `GET /api/cron/daily` at 10:00 UTC) in prod; node-cron in `server.ts` for local dev
 - **UI:** Tailwind CSS v3 + custom Radix UI-based components (NOT the new shadcn v4 — replaced with v3-compatible versions)
-- **Deploy target:** Railway (single service + PostgreSQL addon)
+- **Deploy target:** Vercel (app + cron) + Railway (PostgreSQL addon)
 
 ## Key Files
 - `server.ts` — custom Next.js server, seeds default user, starts cron after server.listen()
