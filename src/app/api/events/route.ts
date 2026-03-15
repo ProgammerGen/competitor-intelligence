@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { db } from "@/lib/db";
 import { events, relevanceScores, trackedCompetitors, userCompanies } from "@/lib/db/schema";
-import { and, desc, eq, gte, ne } from "drizzle-orm";
+import { and, desc, eq, gte, ne, or } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -19,9 +19,14 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 100);
   const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
+  // Products are never noise — always show them regardless of isNoise flag
+  const isProductTab = moduleType === "product_launch";
+
   const conditions = [
     ne(relevanceScores.finalScore, 0), // suppress 90+ day events
-    eq(relevanceScores.isNoise, false),
+    ...(isProductTab
+      ? [] // products: no noise filter — every launch matters
+      : [eq(relevanceScores.isNoise, false)]),
     gte(relevanceScores.finalScore, minScore),
   ];
 

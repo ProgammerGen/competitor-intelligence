@@ -36,14 +36,21 @@ function makeProduct(url: string, title?: string, price?: string, image?: string
 // ---------- Strategy 1: Shopify /products.json ----------
 async function tryProductsJson(domain: string): Promise<ShopifyProduct[]> {
   try {
-    const res = await fetch(`https://${domain}/products.json?limit=250`, {
+    const url = `https://${domain}/products.json?limit=250`;
+    console.log(`[shopify] Trying products.json for ${domain}`);
+    const res = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT),
       headers: HEADERS,
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      console.log(`[shopify] products.json returned ${res.status} for ${domain}`);
+      return [];
+    }
     const data = (await res.json()) as { products: ShopifyProduct[] };
+    console.log(`[shopify] products.json returned ${data.products?.length ?? 0} products for ${domain}`);
     return data.products ?? [];
-  } catch {
+  } catch (err) {
+    console.error(`[shopify] products.json fetch error for ${domain}:`, err);
     return [];
   }
 }

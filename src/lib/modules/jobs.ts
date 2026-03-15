@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { events, relevanceScores } from "@/lib/db/schema";
 import type { TrackedCompetitor, UserCompany } from "@/lib/db/schema";
 import { summarizeJob } from "@/lib/services/openai";
+import { getCompanyProducts } from "@/lib/services/companyProducts";
 import { computeRecencyPenalty, computeFinalScore } from "@/lib/scoring";
 
 const CAREERS_PATHS = ["/jobs", "/careers", "/about/careers", "/work-with-us"];
@@ -58,6 +59,7 @@ export async function runJobsModule(
   competitor: TrackedCompetitor,
   company: UserCompany
 ): Promise<void> {
+  const companyProductList = await getCompanyProducts(company.id);
   const listings = await fetchJobListings(competitor.domain);
   if (listings.length === 0) return;
 
@@ -78,7 +80,8 @@ export async function runJobsModule(
       competitor.name,
       competitor.domain,
       job.title,
-      job.text || job.title
+      job.text || job.title,
+      companyProductList
     );
 
     const signalStrength = typeof score.signal_strength === "number" ? score.signal_strength : 0;

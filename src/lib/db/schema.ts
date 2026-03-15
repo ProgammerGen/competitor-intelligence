@@ -52,6 +52,26 @@ export const userCompanies = pgTable("user_companies", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const companyProducts = pgTable(
+  "company_products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userCompanyId: uuid("user_company_id")
+      .references(() => userCompanies.id)
+      .notNull(),
+    title: text("title").notNull(),
+    handle: text("handle"),
+    description: text("description"),
+    price: text("price"),
+    imageUrl: text("image_url"),
+    productType: text("product_type"),
+    sourceType: text("source_type").default("auto").notNull(),
+    externalId: text("external_id").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("company_products_idempotency_idx").on(t.userCompanyId, t.externalId)]
+);
+
 export const trackedCompetitors = pgTable(
   "tracked_competitors",
   {
@@ -116,6 +136,7 @@ export const relevanceScores = pgTable("relevance_scores", {
   isNoise: boolean("is_noise").notNull(),
   recencyPenalty: integer("recency_penalty").notNull(),
   finalScore: integer("final_score").notNull(),
+  matchedProducts: jsonb("matched_products").$type<string[]>(),
   scoredAt: timestamp("scored_at").defaultNow().notNull(),
 });
 
@@ -136,8 +157,12 @@ export interface ShopifyProduct {
   id: number;
   title: string;
   handle: string;
+  body_html?: string;
   created_at: string;
   updated_at: string;
+  vendor?: string;
+  product_type?: string;
+  tags?: string[];
   variants: Array<{ price: string; title: string }>;
   images: Array<{ src: string }>;
 }
@@ -145,4 +170,5 @@ export interface ShopifyProduct {
 export type UserCompany = typeof userCompanies.$inferSelect;
 export type TrackedCompetitor = typeof trackedCompetitors.$inferSelect;
 export type Event = typeof events.$inferSelect;
+export type CompanyProduct = typeof companyProducts.$inferSelect;
 export type RelevanceScore = typeof relevanceScores.$inferSelect;

@@ -34,7 +34,7 @@ npm run dev       # starts at http://localhost:3000
 
 ## Architecture Overview
 
-**Stack:** Next.js 16 (App Router) · Drizzle ORM · PostgreSQL · gpt-4o-mini · Vercel Cron · Railway (database only)
+**Stack:** Next.js 14 (App Router) · TypeScript · Drizzle ORM · PostgreSQL · gpt-4o-mini · Tailwind CSS v3 · Railway
 
 **Deployment:**
 
@@ -62,9 +62,11 @@ Vercel (Next.js serverless)          Railway
 - `raw_data JSONB`: full original payload stored for score recomputation without re-fetching
 - `source_url NOT NULL`: enforced at DB level, never null
 
-`relevance_scores` is separate from `events` to allow recomputation independently of event data.
+`relevance_scores` is separate from `events` to allow recomputation independently of event data. Includes `matched_products JSONB` for storing which of the user's products are affected by a competitor event.
 
-`product_snapshots` stores full catalogs per sync. Pruned to 30 days. The `events` table holds the permanent delta history.
+`company_products` stores the user's own product catalog (auto-fetched from their Shopify store + manually added). Used by all AI scoring prompts to identify direct competitive threats.
+
+`product_snapshots` stores full competitor catalogs per sync. Pruned to 30 days. The `events` table holds the permanent delta history.
 
 ---
 
@@ -127,10 +129,13 @@ No HTTP requests to original sources. Scoring is a pure function over stored dat
 - Context feeding: company name, industry, target customer profile, why_customers_buy fed to every scoring prompt
 - Batching: news and web search results scored in a single LLM call per competitor (spec requirement)
 - Idempotency: `UNIQUE(competitor_id, module_type, external_id)` enforced at schema level
-- All 7 required tables: users, user_companies, tracked_competitors, product_snapshots, events, relevance_scores, module_runs
+- All 8 tables: users, user_companies, company_products, tracked_competitors, product_snapshots, events, relevance_scores, module_runs
 - Deployment: Vercel (app) + Railway (PostgreSQL) + Vercel Cron (daily scheduler)
 - Monitoring page: module status grid, last-run timestamps, Run Now triggers per module, error states
 - Competitor management: add/remove competitors from monitoring page, change company resets all data
+- Company product catalog: auto-fetched on company confirmation, manual add/delete, daily sync, fed into all AI scoring prompts
+- Product matching: AI identifies which user products are affected by competitor events, shown as "Affects: Your [Product]" pills in feed
+- Company-aware summaries: all module summaries reference user's company name and explain specific business impact
 
 ### Gaps / partial ⚠️
 
@@ -199,8 +204,9 @@ Every scoring prompt includes a `buildCompanyContext()` block:
 - Target customer: age range, geography, personality traits
 - Why customers buy (value proposition)
 - Competitor: name and domain
+- **User's product catalog** (up to 20 products with title, price, description) — enables the AI to identify which specific user products are threatened by competitor activity
 
-This ensures the model scores articles relative to what matters to *this specific brand*. A funding round for a direct competitor in the same category scores significantly higher than the same event for a tangential player.
+This ensures the model scores articles relative to what matters to *this specific brand*. A funding round for a direct competitor in the same category scores significantly higher than the same event for a tangential player. Product matching allows summaries like "this directly competes with your Anti-Aging Serum" rather than generic descriptions.
 
 ### Batching
 
@@ -283,6 +289,39 @@ Claude Code (Anthropic) was used throughout — scaffolding, debugging, refactor
 ---
 
 ## Release Notes
+
+### v1.2.0
+
+**Company Product Intelligence & Enhanced AI Scoring**
+
+- **Company product catalog** — When you confirm your company profile, the app auto-fetches your product catalog (Shopify stores). Products are stored in a new `company_products` table and synced daily. Non-Shopify stores can add products manually via the new `/company/products` management page.
+- **AI product matching** — All scoring prompts (product launches, news, web search, job postings) now receive your product catalog as context. The AI identifies which of your products are directly affected by competitor activity and returns `matched_products` — stored in `relevance_scores` for display.
+- **"Affects your product" pills in feed** — When a competitor event matches one of your products, the feed shows red-tinted pills (e.g. "Affects: Your Anti-Aging Serum") so you can instantly see which products are threatened.
+- **Company-aware summaries** — All AI-generated summaries now reference your company by name and explain specific business impact, replacing generic descriptions.
+- **Product batching fix** — gpt-4o-mini drops the `index` field on large inputs (60+ products). Products are now scored in batches of 20 with fallback index matching. Previously only competitors with < 60 products appeared in the feed.
+- **Products management page** — New page at `/company/products` for viewing auto-detected products, manually adding products, and triggering re-syncs.
+- **Sidebar nav update** — Added "Your Products" navigation item linking to the product catalog page.
+- **Daily product sync** — Scheduler refreshes user's company products before running competitor modules each day.
+
+**New files:**
+
+- `src/lib/services/companyProducts.ts` — sync + query company product catalog
+- `src/app/api/company/products/route.ts` — CRUD API for company products
+- `src/app/company/products/page.tsx` — product catalog management UI
+- `src/components/Sidebar.tsx` — extracted sidebar component with new nav items
+
+**Schema changes:**
+
+- New `company_products` table (8 columns + unique index on `user_company_id, external_id`)
+- New `matched_products` JSONB column on `relevance_scores`
+
+**Known limitations in v1.2.0:**
+
+- Company product auto-fetch only works for Shopify stores; other platforms require manual product entry
+- Product matching accuracy depends on how well gpt-4o-mini understands the competitive relationship between products
+- Job module still returns empty on JS-rendered career pages (unchanged from v1.1.0)
+
+---
 
 ### v1.1.0
 

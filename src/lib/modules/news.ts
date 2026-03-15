@@ -3,6 +3,7 @@ import { events, relevanceScores } from "@/lib/db/schema";
 import type { TrackedCompetitor, UserCompany } from "@/lib/db/schema";
 import { fetchCompetitorNews } from "@/lib/services/newsapi";
 import { scoreArticles } from "@/lib/services/openai";
+import { getCompanyProducts } from "@/lib/services/companyProducts";
 import { computeRecencyPenalty, computeFinalScore } from "@/lib/scoring";
 
 const MIN_FINAL_SCORE = 25;
@@ -11,6 +12,7 @@ export async function runNewsModule(
   competitor: TrackedCompetitor,
   company: UserCompany
 ): Promise<void> {
+  const companyProductList = await getCompanyProducts(company.id);
   const articles = await fetchCompetitorNews(competitor.name);
   if (articles.length === 0) return;
 
@@ -26,7 +28,8 @@ export async function runNewsModule(
     company,
     competitor.name,
     competitor.domain,
-    payload
+    payload,
+    companyProductList
   );
 
   for (const score of scores) {

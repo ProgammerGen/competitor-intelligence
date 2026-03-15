@@ -1,11 +1,14 @@
+import { after } from "next/server";
 import { NextRequest, NextResponse } from "next/server";
 import * as cheerio from "cheerio";
 import { enrichCompany } from "@/lib/services/openai";
+import { syncCompanyProducts } from "@/lib/services/companyProducts";
 import { db } from "@/lib/db";
 import {
   userCompanies,
   users,
   trackedCompetitors,
+  companyProducts,
   events,
   relevanceScores,
   moduleRuns,
@@ -71,6 +74,16 @@ export async function PUT(req: NextRequest) {
       .returning();
   }
 
+  // Auto-fetch company products in background after confirmation
+  after(async () => {
+    try {
+      const count = await syncCompanyProducts(result);
+      console.log(`[company] Synced ${count} products for ${result.domain}`);
+    } catch (err) {
+      console.error("[company] Product sync failed:", err);
+    }
+  });
+
   return NextResponse.json(result);
 }
 
@@ -108,6 +121,7 @@ export async function DELETE() {
     await db.delete(productSnapshots).where(eq(productSnapshots.competitorId, c.id));
   }
 
+  await db.delete(companyProducts).where(eq(companyProducts.userCompanyId, company.id));
   await db.delete(trackedCompetitors).where(eq(trackedCompetitors.userCompanyId, company.id));
   await db.delete(userCompanies).where(eq(userCompanies.id, company.id));
 

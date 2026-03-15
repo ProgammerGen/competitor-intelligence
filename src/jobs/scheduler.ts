@@ -1,5 +1,9 @@
 import cron from "node-cron";
 import { runModule } from "@/lib/modules";
+import { syncCompanyProducts } from "@/lib/services/companyProducts";
+import { db } from "@/lib/db";
+import { userCompanies } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 const MODULE_TYPES = [
   "news",
@@ -14,6 +18,20 @@ export function initScheduler(): void {
     "0 6 * * *",
     async () => {
       console.log("[scheduler] Starting daily sync");
+
+      // Refresh the user's own product catalog before running modules
+      try {
+        const company = await db.query.userCompanies.findFirst({
+          where: eq(userCompanies.confirmed, true),
+        });
+        if (company) {
+          await syncCompanyProducts(company);
+          console.log("[scheduler] Company products refreshed");
+        }
+      } catch (err) {
+        console.error("[scheduler] Company product sync failed:", err);
+      }
+
       for (const moduleType of MODULE_TYPES) {
         try {
           await runModule(moduleType);
