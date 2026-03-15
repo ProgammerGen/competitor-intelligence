@@ -37,13 +37,16 @@ export async function runNewsModule(
     if (!article) continue;
     if (score.is_noise) continue;
 
+    const signalStrength = typeof score.signal_strength === "number" ? score.signal_strength : 0;
+    const sentimentScore = typeof score.sentiment_score === "number" ? score.sentiment_score : 0;
+
     const recencyPenalty = computeRecencyPenalty(new Date(article.publishedAt));
     if (recencyPenalty === -100) continue; // 90+ days old
 
     const finalScore = computeFinalScore(
-      score.signal_strength,
+      signalStrength,
       recencyPenalty,
-      score.sentiment_score
+      sentimentScore
     );
     if (finalScore < MIN_FINAL_SCORE) continue;
 
@@ -65,10 +68,10 @@ export async function runNewsModule(
 
     await db.insert(relevanceScores).values({
       eventId: inserted[0].id,
-      signalStrength: score.signal_strength ?? 0,
+      signalStrength,
       signalReasoning: score.signal_reasoning ?? "",
       sentimentLabel: score.sentiment_label ?? "Neutral",
-      sentimentScore: String(score.sentiment_score ?? 0),
+      sentimentScore: String(sentimentScore),
       summary: score.summary ?? "",
       isNoise: false,
       recencyPenalty,

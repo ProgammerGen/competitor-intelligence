@@ -174,23 +174,26 @@ export async function runProductsModule(
       continue;
     }
 
+    const signalStrength = typeof score.signal_strength === "number" ? score.signal_strength : 0;
+    const sentimentScore = typeof score.sentiment_score === "number" ? score.sentiment_score : 0;
+
     // For products: cap recency penalty at -30 so items up to 1 year old still appear in feed
     const rawPenalty = computeRecencyPenalty(eventDate);
     const recencyPenalty = rawPenalty === -100 ? -30 : rawPenalty;
 
     const finalScore = computeFinalScore(
-      score.signal_strength,
+      signalStrength,
       recencyPenalty,
-      score.sentiment_score
+      sentimentScore
     );
 
     // Products are NEVER noise — every launch is relevant competitive intelligence
     await db.insert(relevanceScores).values({
       eventId: inserted[0].id,
-      signalStrength: score.signal_strength ?? 0,
+      signalStrength,
       signalReasoning: score.signal_reasoning ?? "",
       sentimentLabel: score.sentiment_label ?? "Neutral",
-      sentimentScore: String(score.sentiment_score ?? 0),
+      sentimentScore: String(sentimentScore),
       summary: score.summary ?? "",
       isNoise: false,
       matchedProducts: score.matched_products ?? null,
@@ -281,10 +284,13 @@ async function runTavilyProductFallback(
     const result = results[score.index];
     if (!result) continue;
 
+    const signalStrength = typeof score.signal_strength === "number" ? score.signal_strength : 0;
+    const sentimentScore = typeof score.sentiment_score === "number" ? score.sentiment_score : 0;
+
     const eventDate = new Date(result.publishedAt);
     const rawPenalty = computeRecencyPenalty(eventDate);
     const recencyPenalty = rawPenalty === -100 ? -30 : rawPenalty;
-    const finalScore = computeFinalScore(score.signal_strength, recencyPenalty, score.sentiment_score);
+    const finalScore = computeFinalScore(signalStrength, recencyPenalty, sentimentScore);
 
     const inserted = await db
       .insert(events)
@@ -304,10 +310,10 @@ async function runTavilyProductFallback(
 
     await db.insert(relevanceScores).values({
       eventId: inserted[0].id,
-      signalStrength: score.signal_strength ?? 0,
+      signalStrength,
       signalReasoning: score.signal_reasoning ?? "",
       sentimentLabel: score.sentiment_label ?? "Neutral",
-      sentimentScore: String(score.sentiment_score ?? 0),
+      sentimentScore: String(sentimentScore),
       summary: score.summary ?? "",
       isNoise: false,
       matchedProducts: score.matched_products ?? null,

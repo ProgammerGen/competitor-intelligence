@@ -35,14 +35,17 @@ export async function runWebSearchModule(
     if (!result) continue;
     if (score.is_noise) continue;
 
+    const signalStrength = typeof score.signal_strength === "number" ? score.signal_strength : 0;
+    const sentimentScore = typeof score.sentiment_score === "number" ? score.sentiment_score : 0;
+
     const eventDate = new Date(result.publishedAt);
     const recencyPenalty = computeRecencyPenalty(eventDate);
     if (recencyPenalty === -100) continue;
 
     const finalScore = computeFinalScore(
-      score.signal_strength,
+      signalStrength,
       recencyPenalty,
-      score.sentiment_score
+      sentimentScore
     );
     if (finalScore < 25) continue;
 
@@ -64,10 +67,10 @@ export async function runWebSearchModule(
 
     await db.insert(relevanceScores).values({
       eventId: inserted[0].id,
-      signalStrength: score.signal_strength ?? 0,
+      signalStrength,
       signalReasoning: score.signal_reasoning ?? "",
       sentimentLabel: score.sentiment_label ?? "Neutral",
-      sentimentScore: String(score.sentiment_score ?? 0),
+      sentimentScore: String(sentimentScore),
       summary: score.summary ?? "",
       isNoise: false,
       recencyPenalty,
